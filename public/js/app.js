@@ -18,7 +18,7 @@ const routes = [
   ['/admin', () => import('./views/admin.js'), { role: 'admin' }],
 ];
 
-export const state = { user: null, unread: 0 };
+export const state = { user: null, unread: null };
 let cleanups = [];
 export const onLeave = (fn) => cleanups.push(fn);
 export const go = (hash) => (location.hash = hash);
@@ -51,6 +51,7 @@ export function renderNav() {
 async function logout() {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   state.user = null;
+  state.unread = null;
   toast('Sesión cerrada');
   go('#/');
   renderNav();
@@ -79,7 +80,7 @@ async function pollNotifications() {
   try {
     const { unread } = await api('/api/notifications');
     if (unread !== state.unread) {
-      if (unread > state.unread) toast('Tienes un aviso nuevo 🔔');
+      if (state.unread != null && unread > state.unread) toast('Tienes un aviso nuevo 🔔');
       state.unread = unread;
       renderNav();
     }
