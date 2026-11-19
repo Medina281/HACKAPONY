@@ -241,3 +241,24 @@ export function trackInfo(db, now, d, viewer) {
   }
   return out;
 }
+
+// ---------- Código de equipo y flota ----------
+const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export function teamCode(db, producer, { renew = false } = {}) {
+  const cur = db.prepare('SELECT team_code FROM users WHERE id = ?').get(producer.id)?.team_code;
+  if (cur && !renew) return cur;
+  for (let i = 0; i < 20; i++) {
+    const code = Array.from(crypto.randomBytes(6), (b) => ALPHA[b % ALPHA.length]).join('');
+    try {
+      db.prepare('UPDATE users SET team_code = ? WHERE id = ?').run(code, producer.id);
+      return code;
+    } catch { /* choque improbable: se intenta otro */ }
+  }
+  throw new HttpError(500, 'No se pudo generar el código');
+}
+
+/** Entregas en camino del proveedor con la última ubicación de cada transportista. */
+export function fleet(db, now, producer) {
+  return db.prepare(`${SELECT} WHERE d.producer_id = ? AND d.status IN ('asignada','recogida') ORDER BY d.picked_at DESC`).all(producer.id)
+    .map((d) => trackInfo(db, now, d, producer));
+}

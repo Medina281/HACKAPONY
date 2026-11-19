@@ -196,6 +196,8 @@ export function sweepExpired(db, now) {
 
 const ORDER_SELECT = `SELECT o.*, l.product, l.quality, l.municipality, l.pickup_point, l.pickup_window, l.photo,
   l.expires_at AS lot_expires_at, l.producer_transport,
+  (SELECT d.id FROM deliveries d WHERE d.order_id = o.id AND d.status != 'cancelada') AS delivery_id,
+  (SELECT d.status FROM deliveries d WHERE d.order_id = o.id AND d.status != 'cancelada') AS delivery_status,
   p.name AS producer_name, p.business_name AS producer_business, p.phone AS producer_phone,
   b.name AS buyer_name, b.business_name AS buyer_business, b.phone AS buyer_phone, b.municipality AS buyer_municipality
   FROM orders o JOIN lots l ON l.id = o.lot_id JOIN users p ON p.id = o.producer_id JOIN users b ON b.id = o.buyer_id`;
@@ -209,6 +211,7 @@ export function serializeOrder(o, viewer) {
     created_at: o.created_at, updated_at: o.updated_at, delivered_at: o.delivered_at, cancel_reason: o.cancel_reason,
     lot_id: o.lot_id, municipality: o.municipality, pickup_point: o.pickup_point, pickup_window: o.pickup_window,
     photo: o.photo, producer_transport: !!o.producer_transport, is_demo: !!o.is_demo,
+    delivery_id: o.delivery_id ?? null, delivery_status: o.delivery_status ?? null,
     producer: { name: o.producer_business || o.producer_name, phone: o.producer_phone },
     buyer: { name: o.buyer_business || o.buyer_name, contact: o.buyer_name, phone: o.buyer_phone, municipality: o.buyer_municipality },
     role: isBuyer ? 'comprador' : viewer.id === o.producer_id ? 'productor' : 'admin',

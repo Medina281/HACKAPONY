@@ -27,8 +27,13 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
 
   // ---------- Autenticación ----------
   route('POST', '/api/auth/register', ({ body, t, res }) => {
-    if (body.role === 'transportista')
-      throw bad('Los transportistas los da de alta su productor desde su panel', { role: 'Pide a tu productor que te registre' });
+    let employer = null;
+    if (body.role === 'transportista') {
+      // El transportista crea SU propia cuenta, pero sólo con el código de equipo que le da su proveedor.
+      const code = String(body.team_code || '').trim().toUpperCase();
+      employer = code ? db.prepare(`SELECT * FROM users WHERE team_code = ? AND role = 'productor' AND active = 1`).get(code) : null;
+      if (!employer) throw bad('Revisa el código de tu proveedor', { team_code: code ? 'Código no encontrado' : 'Pide el código a tu proveedor' });
+    }
     const v = validateRegistration(body);
     if (db.prepare('SELECT 1 FROM users WHERE phone = ?').get(v.phone))
       throw bad('Ese teléfono ya está registrado', { phone: 'Ya registrado; inicia sesión' });
@@ -40,6 +45,10 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(v.role, v.name, v.business_name, v.business_type, v.email, v.phone, auth.hashPassword(v.password), v.municipality, v.pickup_point, t, v.vehicle, v.capacity_kg, v.refrigerated);
+    if (employer) {
+      db.prepare('UPDATE users SET employer_id = ?, municipality = ? WHERE id = ?').run(employer.id, employer.municipality, r.lastInsertRowid);
+      db.prepare('INSERT INTO notifications (user_id, text, link, created_at) VALUES (?,?,?,?)').run(employer.id, `${v.name} se registró como tu transportista`, '#/productor/equipo', t);
+    }
     const token = auth.createSession(db, Number(r.lastInsertRowid), t);
     res.setHeader('Set-Cookie', auth.sessionCookie(token, { secure: process.env.COOKIE_SECURE === '1' }));
     return [201, { user: auth.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid)) }];
@@ -200,7 +209,16 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
   // ---------- Transportistas del productor (su propio personal) ----------
   route('GET', '/api/producer/drivers', ({ user }) => {
     auth.requireRole(user, 'productor');
-    return { drivers: deliveries.listDrivers(db, user) };
+    return { drivers: deliveries.listDrivers(db, user), team_code: deliveries.teamCode(db, user) };
+  });
+  route('POST', '/api/producer/team-code', ({ user }) => {
+    auth.requireRole(user, 'productor');
+    return { team_code: deliveries.teamCode(db, user, { renew: true }) };
+  });
+  // Flota en vivo: dónde van ahora mismo los transportistas del proveedor
+  route('GET', '/api/producer/fleet', ({ user, t }) => {
+    auth.requireRole(user, 'productor');
+    return { fleet: deliveries.fleet(db, t, user) };
   });
   route('POST', '/api/producer/drivers', ({ user, body, t }) => {
     auth.requireRole(user, 'productor');

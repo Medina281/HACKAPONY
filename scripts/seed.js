@@ -8,12 +8,13 @@ import { hashPassword } from '../src/auth.js';
 import { createLot } from '../src/services/lots.js';
 import { reserve, transition } from '../src/services/orders.js';
 import { requestDelivery, actOnDelivery } from '../src/services/deliveries.js';
+import { municipality } from '../public/js/shared/catalog.js';
 import { referenceFor } from '../src/services/reference.js';
 
 // Precio del productor y horas de frescura de la demo tomados de la referencia regional del equipo
 // (Mercado de Abasto de Morelia en el archivo del equipo; referencia NO verificada contra el SNIIM).
-function R(product) {
-  const r = referenceFor(product, 'Michoacán');
+function R(product, state = 'Michoacán') {
+  const r = referenceFor(product, state);
   const v = r.available ? r.variants[0] : null;
   return v ? { ref_price: Math.round(v.freq_c / 50) / 2, hours: v.hours } : {};
 }
@@ -68,6 +69,7 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   addUser('expoBuyer', { role: 'comprador', name: 'Ana Torres', business: 'Restaurante El Fogón', type: 'restaurante', phone: '4431000001', muni: 'morelia', password: 'expo2026' });
   addUser('expoDriver', { role: 'transportista', name: 'Luis Mendoza', phone: '4431000003', muni: 'tarimbaro', password: 'expo2026' });
   db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, employer_id=? WHERE phone='4431000003'").run(users.expoProd.id);
+  db.prepare("UPDATE users SET team_code = 'EXPO26' WHERE phone = '4431000002'").run(); // código de equipo para registrar transportistas en vivo
   addUser('admin', { role: 'admin', name: 'Administración Raíz Directa', phone: '4430000999', email: 'admin@demo.mx', muni: 'morelia' });
 
   const opts = { uploadsDir: uploadsDir || path.join(ROOT, 'data', 'uploads'), isDemo: 1 };
@@ -145,6 +147,44 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   lot('tacam', t, { product: 'Aguacate', category: 'fruta', quality: 'excedente', kg: 150, min_kg: 10, producer_transport: true, ...R('Aguacate') });
   lot('piedad', t, { product: 'Chile', category: 'verdura', quality: 'excedente', kg: 70, min_kg: 5, notes: 'Jalapeño.', ...R('Chile') });
   lot('sahuayo', t, { product: 'Tomate verde', category: 'verdura', quality: 'excedente', kg: 110, min_kg: 10, ...R('Tomate verde') });
+
+  // Proveedores de demostración en todo México: cada oferta toma la referencia del estado donde está
+  const NAC = [
+    ['culiacan', 'Agrícola del Valle de Culiacán', [['Jitomate', 'excedente', 400], ['Chile', 'imperfeccion', 150]]],
+    ['hermosillo', 'Campos de Sonora', [['Sandía', 'excedente', 600], ['Melón', 'maduro', 250]]],
+    ['tijuana', 'Hortalizas Frontera', [['Lechuga', 'excedente', 120], ['Cilantro', 'maduro', 40]]],
+    ['chihuahua', 'Manzanas de la Sierra', [['Manzana', 'imperfeccion', 500], ['Cebolla', 'excedente', 300]]],
+    ['torreon', 'Melones La Laguna', [['Melón', 'excedente', 350]]],
+    ['monterrey', 'Distribuidora Regia', [['Papa', 'imperfeccion', 400], ['Zanahoria', 'excedente', 200]]],
+    ['reynosa', 'Cítricos del Norte', [['Naranja', 'excedente', 500]]],
+    ['guadalajara', 'Huertas de Jalisco', [['Aguacate', 'maduro', 200], ['Jitomate', 'maduro', 180]]],
+    ['leon', 'Hortalizas El Bajío', [['Lechuga', 'imperfeccion', 150], ['Calabacita', 'excedente', 120]]],
+    ['queretaro', 'Rancho Querétaro', [['Nopal', 'excedente', 90], ['Tomate verde', 'excedente', 140]]],
+    ['aguascalientes', 'Guayabas de Calvillo', [['Guayaba', 'imperfeccion', 220]]],
+    ['cdmx', 'Bodega Central de Abasto', [['Plátano', 'maduro', 300], ['Papaya', 'maduro', 160], ['Mango', 'proximo', 200]]],
+    ['toluca', 'Productores del Valle de Toluca', [['Papa', 'excedente', 350], ['Zanahoria', 'imperfeccion', 180]]],
+    ['puebla', 'Tomatillo Poblano', [['Tomate verde', 'excedente', 260], ['Chile', 'excedente', 100]]],
+    ['oaxaca', 'Cosechas de Oaxaca', [['Mango', 'maduro', 180]]],
+    ['xalapa', 'Cítricos de Veracruz', [['Limón', 'excedente', 350], ['Naranja', 'imperfeccion', 400]]],
+    ['villahermosa', 'Plátanos de Tabasco', [['Plátano', 'excedente', 500]]],
+    ['merida', 'Huertos de Yucatán', [['Papaya', 'excedente', 220], ['Limón', 'maduro', 120]]],
+    ['tuxtla', 'Frutas de Chiapas', [['Mango', 'excedente', 260], ['Plátano', 'imperfeccion', 200]]],
+    ['acapulco', 'Huerta Costa Grande', [['Papaya', 'proximo', 90]]],
+  ];
+  NAC.forEach(([muni, business, items], i) => {
+    const key = `nac${i}`;
+    const m = municipality(muni);
+    addUser(key, { role: 'productor', name: business, business, phone: String(4439100000 + i), muni, pickup: `Bodega en ${m.name} (ficticio)` });
+    items.forEach(([product, quality, kg], j) => {
+      const ref = R(product, m.ref_state);
+      // Algunas ofertas se publicaron hace rato para que el mapa y los precios muestren distintos tramos
+      const age = ((i + j) % 4) * 0.2 * (ref.hours || 24) * H;
+      lot(key, t - age, { product, quality, kg, min_kg: kg >= 300 ? 20 : 5, producer_transport: (i + j) % 2 === 0, ...ref });
+    });
+  });
+  addUser('cdmxBuyer', { role: 'comprador', name: 'Laura Ríos', business: 'Comedor Industrial Iztapalapa', type: 'comedor', phone: '4439200001', muni: 'cdmx' });
+  addUser('gdlBuyer', { role: 'comprador', name: 'Jorge Lara', business: 'Restaurante Tapatío', type: 'restaurante', phone: '4439200002', muni: 'guadalajara' });
+  addUser('mtyBuyer', { role: 'comprador', name: 'Sofía Garza', business: 'Juguería Regia', type: 'jugueria', phone: '4439200003', muni: 'monterrey' });
 
   // Ofertas de la cuenta de exposición (entrega a domicilio con su propio transportista)
   lot('expoProd', t, { product: 'Jitomate', category: 'verdura', quality: 'excedente', kg: 150, min_kg: 5, producer_transport: true, pickup_window: '8:00 a 18:00', notes: 'Saladette de primera que no alcanzó a salir al mercado.', ...R('Jitomate') });

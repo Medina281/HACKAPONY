@@ -33,13 +33,42 @@ async function orderWithDelivery(kg = 20, extra = {}) {
 }
 
 describe('Transportista del productor', () => {
-  test('nadie se registra solo como transportista; lo da de alta su productor', async () => {
-    const r = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Libre', phone: '4438887777', password: 'secreta123', municipality: 'morelia', capacity_kg: 900 });
-    assert.equal(r.status, 400);
-    assert.ok(r.body.fields.role);
-    const me = (await carrier.get('/api/carrier/summary')).body;
-    assert.ok(me.employer, 'sabe para qué productor trabaja');
+  test('el transportista crea su propia cuenta sólo con el código de equipo de su proveedor', async () => {
+    const sin = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Libre', phone: '4438887777', password: 'secreta123', municipality: 'morelia' });
+    assert.equal(sin.status, 400);
+    assert.ok(sin.body.fields.team_code);
+    const mal = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Libre', phone: '4438887777', password: 'secreta123', municipality: 'morelia', team_code: 'ZZZZZZ' });
+    assert.equal(mal.status, 400);
+    const { team_code } = (await prod.get('/api/producer/drivers')).body;
+    assert.match(team_code, /^[A-Z2-9]{6}$/);
+    const nuevo = client(app.base);
+    const ok = await nuevo.post('/api/auth/register', { role: 'transportista', name: 'Chofer Propio', phone: '4438887777', password: 'secreta123', municipality: 'morelia', team_code: team_code.toLowerCase() });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    const me = (await nuevo.get('/api/carrier/summary')).body;
+    assert.ok(me.employer, 'queda ligado a su proveedor');
+    assert.ok((await prod.get('/api/producer/drivers')).body.drivers.some((d) => d.name === 'Chofer Propio'), 'el proveedor lo ve en su equipo');
+    assert.equal((await nuevo.get('/api/deliveries')).body.deliveries.length, 0, 'no ve entregas que no le asignaron');
+    // Cambiar el código invalida el anterior
+    await prod.post('/api/producer/team-code');
+    const viejo = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Otro', phone: '4438887778', password: 'secreta123', municipality: 'morelia', team_code });
+    assert.equal(viejo.status, 400);
     assert.equal((await buyer.post('/api/producer/drivers', { name: 'X', phone: '4437770009', password: 'secreta123', capacity_kg: 100 })).status, 403);
+  });
+
+  test('el proveedor ve su flota en vivo', async () => {
+    const f = await orderWithDelivery(5);
+    await prod.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier.id });
+    await prod.post(`/api/orders/${f.folio}/confirmar`);
+    await carrier.post(`/api/deliveries/${f.id}/pickup`);
+    await carrier.post(`/api/deliveries/${f.id}/position`, { lat: 19.75, lng: -101.18, acc: 10 });
+    const fleet = (await prod.get('/api/producer/fleet')).body.fleet;
+    const mine = fleet.find((x) => x.id === f.id);
+    assert.ok(mine.position && mine.eta_min > 0);
+    assert.equal((await prod2.get('/api/producer/fleet')).body.fleet.some((x) => x.id === f.id), false, 'otro proveedor no la ve');
+    assert.equal((await buyer.get('/api/producer/fleet')).status, 403);
+    const orders = (await buyer.get('/api/orders')).body.orders;
+    assert.equal(orders.find((o) => o.folio === f.folio).delivery_status, 'recogida', 'el cliente ve que va en camino en su lista');
+    await carrier.post(`/api/deliveries/${f.id}/deliver`, { code: f.code });
   });
 
   test('flujo: comercio pide entrega → productor asigna a SU transportista → carga → entrega con código', async () => {
@@ -65,7 +94,7 @@ describe('Transportista del productor', () => {
     assert.equal(done.body.delivery.status, 'entregada');
     assert.equal((await buyer.get(`/api/orders/${f.folio}`)).body.order.status, 'recolectado');
     const s = (await carrier.get('/api/carrier/summary')).body.summary;
-    assert.equal(s.delivered, 1);
+    assert.ok(s.delivered >= 1);
   });
 
   test('sólo se pide entrega si el productor la ofrece; capacidad del vehículo se respeta', async () => {

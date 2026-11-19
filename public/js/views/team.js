@@ -1,18 +1,26 @@
 // "Mi transporte": el productor da de alta a su propio personal de reparto y ve sus entregas a domicilio.
 import { api } from '../api.js';
 import { $, e, kg, toast, fieldErrors, fmtDate } from '../ui.js';
+import { onLeave } from '../app.js';
+import { loadLeaflet, addTiles } from './map.js';
 
 const I = (n) => `<svg class="i" aria-hidden="true"><use href="/icons.svg#${n}"/></svg>`;
 const ST = { abierta: ['Por asignar', 'warn'], asignada: ['Asignada', 'info'], recogida: ['En camino', 'info'] };
 
 export default async function team({ app }) {
-  const [{ drivers }, { deliveries }] = await Promise.all([api('/api/producer/drivers'), api('/api/deliveries')]);
+  const [{ drivers, team_code: code }, { deliveries }, { fleet }] = await Promise.all([api('/api/producer/drivers'), api('/api/deliveries'), api('/api/producer/fleet')]);
   const active = drivers.filter((d) => d.active);
   app.innerHTML = `
   <div class="wrap page stack" style="max-width:760px">
     <p><a href="#/productor">← Inicio</a></p>
     <div><span class="mono-tag">Mi transporte</span><h1 style="margin:6px 0 0">Entregas y transportistas</h1>
       <p class="muted" style="margin:4px 0 0">Tus transportistas son tu personal: sólo ven las entregas que tú les asignas.</p></div>
+
+    <div class="card stack" id="fleetCard">
+      <div class="row between"><h2 style="margin:0">${I('truck')} Mis transportistas en ruta</h2><span class="pill info" id="fleetCount"></span></div>
+      <div id="fleetMap" style="height:300px;border-radius:18px;overflow:hidden;background:#eef5f0"></div>
+      <div id="fleetList" class="stack"></div>
+    </div>
 
     <h2>Entregas a domicilio en curso</h2>
     ${deliveries.length ? deliveries.map((d) => `
@@ -32,7 +40,13 @@ export default async function team({ app }) {
         <button class="btn sm ${d.active ? 'ghost' : 'secondary'}" data-toggle="${d.id}" data-on="${d.active ? 0 : 1}" style="flex:none">${d.active ? 'Dar de baja' : 'Reactivar'}</button>
       </div>`).join('') : '<p class="muted">Aún no registras a nadie.</p>'}
 
-    <details class="card" ${active.length ? '' : 'open'}><summary><strong>${I('plus')} Agregar transportista</strong></summary>
+    <div class="card stack">
+      <strong>Código de tu equipo</strong>
+      <div class="row between"><span class="code" style="font-size:1.8rem;margin:0">${e(code)}</span><button type="button" class="btn ghost sm" id="newCode">Cambiar código</button></div>
+      <p class="small muted" style="margin:0">Tu transportista crea su propia cuenta en “Crear cuenta → Transporto” y escribe este código. Así entra con su teléfono y contraseña y sólo ve tus entregas.</p>
+    </div>
+
+    <details class="card" ${active.length ? '' : 'open'}><summary><strong>${I('plus')} O regístralo tú</strong></summary>
       <form id="add" class="stack" novalidate style="margin-top:10px">
         <div class="field"><label for="name">Nombre</label><input id="name" name="name" required><div class="err" data-for="name"></div></div>
         <div class="field"><label for="phone">Teléfono (con él entra a la app)</label><input id="phone" name="phone" inputmode="tel" placeholder="10 dígitos"><div class="err" data-for="phone"></div></div>
@@ -46,6 +60,59 @@ export default async function team({ app }) {
       </form>
     </details>
   </div>`;
+
+  $('#newCode').addEventListener('click', async () => {
+    if (!confirm('¿Cambiar el código? El anterior dejará de servir para registrarse.')) return;
+    await api('/api/producer/team-code', { method: 'POST' });
+    team({ app });
+  });
+
+  // ---------- Flota en vivo ----------
+  let L = null;
+  let map = null;
+  const layers = new Map();
+  const clock = (t) => new Date(t).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+  function paintFleet(list) {
+    const moving = list.filter((x) => x.position);
+    $('#fleetCount').textContent = `${list.filter((x) => x.status === 'recogida').length} en camino`;
+    $('#fleetList').innerHTML = list.length ? list.map((x) => `<a class="row between" href="#/seguimiento/${x.id}" style="text-decoration:none;color:inherit;border-top:1px solid var(--line);padding-top:8px">
+        <span class="small"><b>${e(x.carrier?.name || 'Sin asignar')}</b> · ${e(x.product)} ${kg(x.weight_g)} → ${e(x.buyer || '')}<br><span class="muted">${x.status === 'recogida' ? (x.position ? `~${x.eta_min} min · llega ${clock(x.eta_at)} · ${x.remaining_km} km` : 'en camino, sin ubicación todavía') : 'por cargar'}</span></span>
+        <span class="pill ${x.position ? (x.position.stale ? 'warn' : 'info') : 'muted'}">${x.position ? (x.position.stale ? 'sin señal' : 'en vivo') : x.status === 'recogida' ? 'sin GPS' : 'en espera'}</span></a>`).join('')
+      : '<p class="small muted" style="margin:0">Nadie va en camino ahora. Cuando tu transportista toque “Ya cargué”, aparece aquí en el mapa.</p>';
+    if (!map) return;
+    const seen = new Set();
+    for (const x of moving) {
+      seen.add(x.id);
+      const ll = [x.position.lat, x.position.lng];
+      if (!layers.has(x.id)) {
+        const m = L.marker(ll, { icon: L.divIcon({ className: '', html: `<div class="map-pin truck">${I('truck')}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map).bindTooltip(`${e(x.carrier?.name || '')} → ${e(x.buyer || '')}`);
+        const d = L.marker([x.dest.lat, x.dest.lng], { icon: L.divIcon({ className: '', html: `<div class="map-pin dest">${I('flag')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] }) }).addTo(map).bindTooltip(e(x.buyer || ''));
+        const line = L.polyline([ll, [x.dest.lat, x.dest.lng]], { color: '#1E9566', weight: 3, dashArray: '6 8' }).addTo(map);
+        layers.set(x.id, { m, d, line });
+      } else {
+        const g = layers.get(x.id);
+        g.m.setLatLng(ll);
+        g.line.setLatLngs([ll, [x.dest.lat, x.dest.lng]]);
+      }
+    }
+    for (const [id, g] of layers) if (!seen.has(id)) { map.removeLayer(g.m); map.removeLayer(g.d); map.removeLayer(g.line); layers.delete(id); }
+    const pts = moving.flatMap((x) => [[x.position.lat, x.position.lng], [x.dest.lat, x.dest.lng]]);
+    if (pts.length && !map._fitted) { map.fitBounds(pts, { padding: [40, 40], maxZoom: 14 }); map._fitted = true; }
+  }
+  try {
+    L = await loadLeaflet();
+    const home = fleet[0]?.from || { lat: 19.7, lng: -101.19 };
+    map = L.map('fleetMap', { scrollWheelZoom: false }).setView([home.lat, home.lng], 10);
+    addTiles(L, map, 17);
+  } catch {
+    $('#fleetMap').innerHTML = '<p class="muted" style="padding:16px">No se pudo cargar el mapa; la lista de abajo sí se actualiza.</p>';
+  }
+  paintFleet(fleet);
+  const poll = setInterval(async () => {
+    if (document.hidden) return;
+    try { paintFleet((await api('/api/producer/fleet')).fleet); } catch { /* siguiente ciclo */ }
+  }, 8000);
+  onLeave(() => clearInterval(poll));
 
   $('#add').addEventListener('submit', async (ev) => {
     ev.preventDefault();

@@ -279,6 +279,11 @@ const MIGRATIONS = [
   ALTER TABLE deliveries ADD COLUMN dest_lat REAL;
   ALTER TABLE deliveries ADD COLUMN dest_lng REAL;
   `,
+  // v7: código de equipo del proveedor (el transportista se registra solo con ese código)
+  `
+  ALTER TABLE users ADD COLUMN team_code TEXT;
+  CREATE UNIQUE INDEX idx_users_team_code ON users(team_code) WHERE team_code IS NOT NULL;
+  `,
 ];
 
 export function openDb(file) {

@@ -30,6 +30,7 @@ export default async function landing({ app, state }) {
       <div class="role-cards">
         <a class="role-card" href="#/registro?rol=productor"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></div><strong>Vendo</strong><span class="small muted">Publica por voz o con foto. Recupera lo que ibas a perder.</span></a>
         <a class="role-card" href="#/ofertas"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg></div><strong>Compro</strong><span class="small muted">Fondas, fruterías y comedores: aparta con descuento.</span></a>
+        <a class="role-card" href="#/registro?rol=transportista"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg></div><strong>Transporto</strong><span class="small muted">Entregas los pedidos de tu proveedor, con el código que él te da.</span></a>
       </div>`}
     </div>
   </section>

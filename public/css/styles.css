@@ -708,3 +708,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 .share-live { display: flex; align-items: center; gap: 10px; background: #E9F8F0; border: 1px solid #BFE8D2; border-radius: 16px; padding: 10px 12px; }
 .share-live .dot { width: 10px; height: 10px; border-radius: 50%; background: #1E9566; animation: pulse 1.2s infinite; flex: none; }
 .ref-card { margin-top: 8px; border: 1px dashed #BFD8C8; border-radius: 14px; padding: 10px; display: grid; gap: 8px; background: #fbfdfb; }
+
+@media (min-width: 760px) { .role-cards { grid-template-columns: repeat(3, 1fr); } }

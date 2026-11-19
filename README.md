@@ -170,3 +170,24 @@ Cuando el transportista toca **"Ya cargué"**, su teléfono comparte la ubicaci�
 ## Precios de referencia regionales (archivo del equipo)
 
 `src/data/referencia-precios.json` viene del archivo `sniim_nacional_completo.json` que entregó el equipo (30 variedades, 32 estados, 50 mercados). **No se presenta como precio oficial del SNIIM**: en los 1,500 registros el mínimo es exactamente 0.88× y el máximo 1.15× del precio frecuente, un patrón de datos generados o modelados, no de una consulta real. Por eso aparece como “Referencia regional del equipo (no verificada)”. Se usa para sugerir el precio del productor y las horas de frescura, para comparar en cada oferta y en la demo. La consulta en vivo al SNIIM sigue siendo lo único marcado como “SNIIM”.
+
+## Cuatro interfaces
+
+| Interfaz | Quién | Qué ve |
+|---|---|---|
+| Proveedor | “Crear cuenta → Vendo” | Su mercancía, pedidos, **Mi transporte**: código de equipo, alta de transportistas, **mapa en vivo de sus transportistas en ruta**. |
+| Cliente | “Crear cuenta → Compro” | Todo lo que puede comprar (ofertas y mapa), sus pedidos y **dónde va cada pedido en camino**. |
+| Transportista | “Crear cuenta → Transporto” + **código de equipo** del proveedor | Sólo las entregas que su proveedor le asigna: qué, a quién, a dónde, ruta, “Ya cargué” y código de entrega. |
+| Administración | Cuenta creada en la base (no se registra) | Reportes, ofertas, pedidos, entregas, usuarios y precios. |
+
+## Precios reales del SNIIM (scraper)
+
+`scripts/sniim/scraper_sniim_real.py` extrae del servidor del SNIIM todos los precios de Frutas y Hortalizas de cada mercado de `#ddlDestino`, con retroceso automático al último día con corte publicado y validación de filas (descarta números del calendario y filas incoherentes). Cada mercado guarda `fecha_corte_sniim` y `url_consulta`; si no cotizó queda `productos: []` y `sin_cotizacion_hoy: true`.
+
+```
+pip install requests beautifulsoup4
+python scripts/sniim/scraper_sniim_real.py          # genera sniim_real_verificado.json
+copy sniim_real_verificado.json src\data\           # (Windows) para que la app lo use
+```
+
+Con ese archivo en `src/data/`, la app muestra “SNIIM real · corte AAAA-MM-DD” con enlace a la consulta. `scripts/sniim/sniimService.js` es el módulo para React (`catalogoSNIIM`, `obtenerPrecioRealSNIIM(productoId, estado)`). El script se escribió sin acceso de red al SNIIM: la lectura de tablas está probada con ejemplos, pero la primera corrida real hay que revisarla.

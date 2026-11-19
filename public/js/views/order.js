@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer } from '../ui.js';
+import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer, muniOptions } from '../ui.js';
 import { qualityLabel, municipality, MUNICIPALITIES } from '../shared/catalog.js';
 import { reportDialog } from './lot.js';
 
@@ -167,7 +167,7 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
       <button class="btn secondary" id="askTruck">Pedir entrega a domicilio</button>
       <form id="truckForm" class="stack" hidden>
         <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
-        <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === state.user.municipality ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${muniOptions(state.user.municipality)}</select></div>
         <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
         <label class="inline-check"><input type="checkbox" id="useHere"><span>Usar mi ubicación actual como punto de entrega <span class="tiny muted">(más exacto para el tiempo de llegada)</span></span></label>
         <input type="hidden" name="dest_lat"><input type="hidden" name="dest_lng">

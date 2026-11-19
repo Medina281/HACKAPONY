@@ -230,6 +230,7 @@ export default async function publish({ app, query, state }) {
     if (d.municipality !== climateMuni) {
       climateMuni = d.municipality;
       loadClimate(); // el clima depende del municipio de recolección
+      loadSniim(); // y la referencia de precios, del estado
     } else renderShelf();
   }
 
@@ -303,14 +304,15 @@ export default async function publish({ app, query, state }) {
   async function loadSniim() {
     const box = $('#sniimBox');
     const p = f.product.value.trim();
-    if (!box || !p || p === sniimFor) return;
-    sniimFor = p;
+    const key = `${p}|${f.municipality.value}`;
+    if (!box || !p || key === sniimFor) return;
+    sniimFor = key;
     box.innerHTML = '<span class="tiny muted">Buscando precios de referencia…</span>';
     const [live, ref] = await Promise.all([
       api(`/api/market/${encodeURIComponent(p)}`).then((x) => x.price).catch(() => null),
-      api(`/api/reference/${encodeURIComponent(p)}`).then((x) => x.reference).catch(() => null),
+      api(`/api/reference/${encodeURIComponent(p)}?state=${encodeURIComponent(municipality(f.municipality.value)?.ref_state || 'Michoacán')}`).then((x) => x.reference).catch(() => null),
     ]);
-    if (f.product.value.trim() !== p) return;
+    if (`${f.product.value.trim()}|${f.municipality.value}` !== key) return;
     sniim = live?.available ? live : null;
     refData = ref?.available ? ref : null;
     let html = '';
@@ -324,10 +326,10 @@ export default async function publish({ app, query, state }) {
       if (live.updating) { sniimFor = null; clearTimeout(sniimTimer); sniimTimer = setTimeout(loadSniim, 6000); }
     }
     if (refData) {
-      html += `<div class="ref-card"><div class="row between"><span class="mono-tag">Referencia ${e(refData.state)}</span><span class="tiny muted">no verificada</span></div>
-        ${refData.variants.map((v, i) => `<div class="row between" style="gap:6px"><span class="small">${e(v.name)}<br><span class="tiny muted">${e(refData.markets[0] || '')} · ${mxn(v.min_c)}–${mxn(v.max_c)} · nacional ${mxn(v.national_freq_c)} · ${v.hours} h de frescura</span></span>
+      html += `<div class="ref-card"><div class="row between"><span class="mono-tag">${refData.verified ? 'SNIIM real' : 'Referencia'} ${e(refData.state)}</span><span class="tiny muted">${refData.verified ? e(refData.label) : 'no verificada'}</span></div>
+        ${refData.variants.map((v, i) => `<div class="row between" style="gap:6px"><span class="small">${e(v.name)}<br><span class="tiny muted">${e(refData.markets[0] || '')} · ${mxn(v.min_c)}–${mxn(v.max_c)} ${v.national_freq_c ? ` · nacional ${mxn(v.national_freq_c)}` : ''}${v.hours ? ` · ${v.hours} h de frescura` : ''}</span></span>
           <span class="row" style="gap:4px;flex:none"><b>${mxn(v.freq_c)}</b><button type="button" class="btn sm secondary" data-useref="${i}">Usar</button></span></div>`).join('')}
-        <p class="tiny muted" style="margin:4px 0 0">${e(refData.label)}. ${e(refData.note)}</p></div>`;
+        <p class="tiny muted" style="margin:4px 0 0">${e(refData.label)}. ${e(refData.note)}${refData.urls?.[0] ? ` <a href="${e(refData.urls[0])}" target="_blank" rel="noopener">Ver consulta en el SNIIM</a>` : ''}</p></div>`;
     }
     box.innerHTML = html;
   }
@@ -392,7 +394,7 @@ export default async function publish({ app, query, state }) {
     if (b.dataset.useref != null && refData) {
       const v = refData.variants[Number(b.dataset.useref)];
       set('ref_price', v.freq_c / 100);
-      if (!f.hours.value) set('hours', v.hours);
+      if (!f.hours.value && v.hours) set('hours', v.hours);
       refSource = 'declarado';
       toast(`Usamos la referencia de ${v.name}${!f.hours.value ? '' : ''}. Ajústala si tu precio es otro.`, 'ok');
     }

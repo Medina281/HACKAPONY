@@ -100,7 +100,7 @@ export function validateRegistration(b) {
   if (!MUNICIPALITIES.some((m) => m.id === b.municipality)) e.municipality = 'Selecciona tu municipio';
   const business_name = str(b.business_name, 80) || (role === 'comprador' ? name || null : null);
   const capacity = b.capacity_kg === '' || b.capacity_kg == null ? null : Math.round(num(b.capacity_kg));
-  if (role === 'transportista' && (!capacity || capacity <= 0 || capacity > 40000)) e.capacity_kg = 'Indica cuántos kilos carga tu vehículo';
+  if (role === 'transportista' && capacity != null && (!Number.isFinite(capacity) || capacity <= 0 || capacity > 40000)) e.capacity_kg = 'Carga máxima no válida';
   if (Object.keys(e).length) throw bad('Revisa los datos marcados', e);
   return {
     vehicle: role === 'transportista' ? str(b.vehicle, 60) || 'Camioneta' : null,

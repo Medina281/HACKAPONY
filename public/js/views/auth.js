@@ -2,17 +2,10 @@ import { api } from '../api.js';
 import { afterLogin } from '../app.js';
 import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
 
-// Cuentas de la exposición: un recorrido limpio con los tres usuarios (y el admin aparte).
-const DEMO = [
-  ['Cliente · Restaurante El Fogón', '4431000001', 'expo2026'],
-  ['Proveedor · Rancho La Esperanza', '4431000002', 'expo2026'],
-  ['Transportista del rancho · Luis Mendoza', '4431000003', 'expo2026'],
-  ['Administrador', '4430000999', 'demo1234'],
-];
 
 export default async function authView({ app, opts, query }) {
   if (opts.mode === 'login') return login(app);
-  return register(app, ['comprador', 'productor'].includes(query.rol) ? query.rol : null);
+  return register(app, ['comprador', 'productor', 'transportista'].includes(query.rol) ? query.rol : null);
 }
 
 function login(app) {
@@ -31,20 +24,8 @@ function login(app) {
       <button class="btn big" type="submit">Entrar</button>
       <p class="center small" style="margin-top:12px">¿No tienes cuenta? <a href="#/registro">Regístrate gratis</a></p>
     </form>
-    <div class="card" style="margin-top:14px">
-      <h3>Entrar rápido (exposición)</h3>
-      <p class="small muted">Toca una cuenta y entras directo. Datos ficticios.</p>
-      <div class="stack">${DEMO.map(([l, p, pw]) => `<button class="btn ghost block" data-demo="${p}" data-pw="${pw}">${e(l)}</button>`).join('')}</div>
-    </div>
   </div>`;
   const f = $('#f');
-  app.addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-demo]');
-    if (!b) return;
-    f.identifier.value = b.dataset.demo;
-    f.password.value = b.dataset.pw;
-    f.requestSubmit();
-  });
   f.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const btn = f.querySelector('[type=submit]');
@@ -74,6 +55,7 @@ function register(app, role) {
         <div class="seg" role="radiogroup">
           <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> Vendo</button>
           <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg> Compro</button>
+          <button type="button" data-role="transportista" class="${role === 'transportista' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Transporto</button>
         </div>
         <div class="err" data-for="role"></div>
       </div>
@@ -89,17 +71,20 @@ function register(app, role) {
       <div class="field" id="bizp" ${role === 'productor' ? '' : 'hidden'}>
         <label for="business_name_p">Nombre de tu huerta o negocio <span class="muted">(opcional)</span></label><input id="business_name_p" placeholder="Ej. Huerta Los Encinos">
       </div>
+      <div class="field" id="team" ${role === 'transportista' ? '' : 'hidden'}>
+        <label for="team_code">Código de tu proveedor</label><input id="team_code" name="team_code" autocapitalize="characters" autocomplete="off" placeholder="Ej. K7P2QX" style="text-transform:uppercase;letter-spacing:.15em">
+        <div class="hint">Te lo da el proveedor para el que entregas (lo ve en su panel, en “Mi transporte”). Así sólo verás las entregas de ese proveedor.</div><div class="err" data-for="team_code"></div>
+      </div>
       <div class="field" id="veh" ${role === 'transportista' ? '' : 'hidden'}>
         <label for="vehicle">Vehículo</label><input id="vehicle" name="vehicle" placeholder="Ej. Camioneta 3.5 t">
-        <div class="two" style="margin-top:10px"><div><label for="capacity_kg">Carga máxima</label><div class="input-unit"><input id="capacity_kg" name="capacity_kg" inputmode="numeric" placeholder="1500"><span>kg</span></div><div class="err" data-for="capacity_kg"></div></div>
+        <div class="two" style="margin-top:10px"><div><label for="capacity_kg">Carga máxima <span class="muted">(opcional)</span></label><div class="input-unit"><input id="capacity_kg" name="capacity_kg" inputmode="numeric" placeholder="1500"><span>kg</span></div><div class="err" data-for="capacity_kg"></div></div>
         <label class="inline-check" style="align-self:end"><input type="checkbox" name="refrigerated"><span>Tengo refrigeración</span></label></div>
       </div>
       <div class="field"><label for="phone">Teléfono (WhatsApp)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="10 dígitos" required>
         <div class="hint">Con él entras y te contactan por WhatsApp. Sólo se comparte con quien tenga un pedido contigo.</div><div class="err" data-for="phone"></div></div>
-      <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
+      <div class="field" id="muniField" ${role === 'transportista' ? 'hidden' : ''}><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
       <div class="field"><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mínimo 8 caracteres.</div><div class="err" data-for="password"></div></div>
       <div class="field"><label for="email">Correo <span class="muted">(opcional)</span></label><input id="email" name="email" type="email" autocomplete="email"><div class="err" data-for="email"></div></div>
-      <p class="tiny muted">¿Eres transportista? Te da de alta el productor con el que trabajas, desde su panel “Mi transporte”.</p>
       <p class="tiny muted">Tus datos de contacto sólo se usan para coordinar pedidos. Lee el <a href="#/privacidad">aviso de privacidad</a>. El correo es opcional.</p>
       <button class="btn big" type="submit">Crear cuenta</button>
       <p class="center small" style="margin-top:12px">¿Ya tienes cuenta? <a href="#/entrar">Entra</a></p>
@@ -115,6 +100,8 @@ function register(app, role) {
     $('#biz').hidden = chosen !== 'comprador';
     $('#bizp').hidden = chosen !== 'productor';
     $('#veh').hidden = chosen !== 'transportista';
+    $('#team').hidden = chosen !== 'transportista';
+    $('#muniField').hidden = chosen === 'transportista';
   });
   f.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -123,7 +110,7 @@ function register(app, role) {
     if (chosen !== 'comprador') delete body.business_type;
     if (chosen === 'productor') body.business_name = $('#business_name_p').value;
     if (chosen === 'transportista') { body.business_name = ''; body.refrigerated = !!f.refrigerated.checked; }
-    else { delete body.vehicle; delete body.capacity_kg; delete body.refrigerated; }
+    else { delete body.vehicle; delete body.capacity_kg; delete body.refrigerated; delete body.team_code; }
     const btn = f.querySelector('[type=submit]');
     const box = $('#regmsg');
     box.hidden = true;

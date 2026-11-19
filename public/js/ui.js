@@ -24,7 +24,7 @@ export function toast(msg, type = '') {
 
 export const muniOptions = (selected, { any } = {}) =>
   (any ? `<option value="">${e(any)}</option>` : '') +
-  MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('');
+  [...new Set(MUNICIPALITIES.map((m) => m.state))].map((st) => `<optgroup label="${e(st)}">${MUNICIPALITIES.filter((m) => m.state === st).map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</optgroup>`).join('');
 
 /** Foto del productor; si no hay, foto real de referencia (Commons) etiquetada; sin red, ícono. */
 export function media(photo, product, cls = '') {

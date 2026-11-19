@@ -101,7 +101,12 @@ export function parseSpoken(input, { context } = {}) {
   if (best) r.product = best.name;
 
   // Ubicación (municipio)
-  for (const m of MUNICIPALITIES) if (new RegExp(`\\b${normalize(m.name)}\\b`).test(t)) r.municipality = m.id;
+  // Fuera de Michoacán se exige "en/de/desde ..." para no confundir "limón colima" con la ciudad de Colima
+  for (const m of MUNICIPALITIES) {
+    const n = normalize(m.name.replace(/\s*\(.*\)/, ''));
+    const re = m.state === 'Michoacán' ? new RegExp(`\\b${n}\\b`) : new RegExp(`\\b(?:en|de|desde|para)\\s+${n}\\b`);
+    if (re.test(t)) r.municipality = m.id;
+  }
 
   r.approx = /\b(como|unos|unas|mas o menos|aproximadamente|casi|alrededor de)\s+\d/.test(t);
 

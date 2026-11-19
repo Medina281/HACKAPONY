@@ -5,6 +5,7 @@
 // (services/market.js) sigue siendo la única fuente que se marca como "SNIIM".
 import fs from 'node:fs';
 import { normalize } from '../../public/js/shared/catalog.js';
+import { realService } from './sniim-real.js';
 
 const REF = JSON.parse(fs.readFileSync(new URL('../data/referencia-precios.json', import.meta.url), 'utf8'));
 export const LABEL = 'Referencia regional del equipo (formato SNIIM, no verificada)';
@@ -21,6 +22,22 @@ export function hoursFor(product) {
 
 /** Referencia del producto en el estado del usuario (Michoacán por defecto) y mediana nacional. */
 export function referenceFor(product, state = 'Michoacán') {
+  // 1) Precios REALES extraídos del SNIIM con el scraper (si el archivo existe)
+  const real = realService();
+  if (real) {
+    const st = state === 'DF' ? 'Distrito Federal' : state;
+    const r = real.obtenerPrecioRealSNIIM(product, st);
+    if (!r.disponible && state === 'DF') Object.assign(r, real.obtenerPrecioRealSNIIM(product, 'DF'));
+    if (r.disponible) {
+      return {
+        available: true, verified: true, label: `SNIIM real · corte ${r.fecha_corte_sniim}`, source: r.fuente, verification: 'sniim_real',
+        note: r.nota || `Precio frecuente real de ${r.mercados.length} mercado(s) de ${r.estado}.`, state: r.estado || 'Nacional',
+        markets: r.mercados.map((m) => m.mercado), urls: r.mercados.map((m) => m.url_consulta),
+        variants: [{ id: r.producto, name: r.producto, origin: '', hours: hoursFor(product), min_c: Math.round(r.precio_min_kg * 100), max_c: Math.round(r.precio_max_kg * 100), freq_c: Math.round(r.precio_frecuente_kg * 100), national_freq_c: null, national_markets: null }],
+      };
+    }
+  }
+  // 2) Referencia del equipo (no verificada)
   const vars = variantsOf(product);
   if (!vars.length) return { available: false, reason: 'Sin referencia para este producto en el archivo del equipo.' };
   const st = REF.markets[state] ? state : 'Michoacán';

@@ -109,3 +109,21 @@ describe('Publicación: método, vida útil y estado obligatorio', () => {
     assert.equal(r.body.lot.municipality, 'uruapan');
   });
 });
+
+describe('SNIIM real (archivo del scraper)', () => {
+  test('usa el precio del estado, o el promedio real nacional, sin inventar', async () => {
+    const { crearServicioSNIIM } = await import('../public/js/shared/sniim-core.js');
+    const s = crearServicioSNIIM({ mercados: [
+      { estado: 'Michoacán', mercado: 'Morelia', fecha_corte_sniim: '2026-11-18', url_consulta: 'u1', productos: [{ producto: 'Tomate Saladette - Primera', precio_min_kg: 18, precio_max_kg: 22, precio_frecuente_kg: 20 }] },
+      { estado: 'Jalisco', mercado: 'Guadalajara', fecha_corte_sniim: '2026-11-18', url_consulta: 'u2', productos: [{ producto: 'Tomate Saladette - Primera', precio_min_kg: 19, precio_max_kg: 24, precio_frecuente_kg: 22 }] },
+      { estado: 'Sonora', mercado: 'Hermosillo', fecha_corte_sniim: null, sin_cotizacion_hoy: true, productos: [] },
+    ] });
+    const mich = s.obtenerPrecioRealSNIIM('jitomate', 'Michoacán');
+    assert.equal(mich.precio_frecuente_kg, 20);
+    assert.equal(mich.alcance, 'estado');
+    const son = s.obtenerPrecioRealSNIIM('jitomate', 'Sonora');
+    assert.equal(son.alcance, 'nacional');
+    assert.equal(son.precio_frecuente_kg, 21);
+    assert.equal(s.obtenerPrecioRealSNIIM('fresa', 'Michoacán').disponible, false, 'no inventa');
+  });
+});
