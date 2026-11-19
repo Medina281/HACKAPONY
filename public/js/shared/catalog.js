@@ -75,14 +75,30 @@ export const productIcon = (name) => `<svg class="i prod" aria-hidden="true"><us
 // Cabeceras municipales (coordenadas aproximadas del centro de la cabecera; sirven
 // sólo para distancias en línea recta y para no exponer la ubicación exacta del productor).
 export const MUNICIPALITIES = [
-  { id: 'morelia', name: 'Morelia', lat: 19.7027, lng: -101.1923 },
-  { id: 'tarimbaro', name: 'Tarímbaro', lat: 19.7942, lng: -101.1784 },
-  { id: 'cuitzeo', name: 'Cuitzeo', lat: 19.9686, lng: -101.1394 },
-  { id: 'zinapecuaro', name: 'Zinapécuaro', lat: 19.8597, lng: -100.8264 },
-  { id: 'quiroga', name: 'Quiroga', lat: 19.665, lng: -101.5238 },
-  { id: 'patzcuaro', name: 'Pátzcuaro', lat: 19.5131, lng: -101.6094 },
-  { id: 'uruapan', name: 'Uruapan', lat: 19.4114, lng: -102.0579 },
-  { id: 'zamora', name: 'Zamora', lat: 19.9858, lng: -102.2836 },
+  { id: 'morelia', name: 'Morelia', region: 'Centro', lat: 19.7027, lng: -101.1923 },
+  { id: 'tarimbaro', name: 'Tarímbaro', region: 'Centro', lat: 19.7942, lng: -101.1784 },
+  { id: 'charo', name: 'Charo', region: 'Centro', lat: 19.7461, lng: -101.0408 },
+  { id: 'cuitzeo', name: 'Cuitzeo', region: 'Cuitzeo', lat: 19.9686, lng: -101.1394 },
+  { id: 'puruandiro', name: 'Puruándiro', region: 'Bajío', lat: 20.0878, lng: -101.5144 },
+  { id: 'zinapecuaro', name: 'Zinapécuaro', region: 'Oriente', lat: 19.8597, lng: -100.8264 },
+  { id: 'hidalgo', name: 'Ciudad Hidalgo', region: 'Oriente', lat: 19.6922, lng: -100.5536 },
+  { id: 'maravatio', name: 'Maravatío', region: 'Oriente', lat: 19.8939, lng: -100.4433 },
+  { id: 'zitacuaro', name: 'Zitácuaro', region: 'Oriente', lat: 19.4357, lng: -100.357 },
+  { id: 'quiroga', name: 'Quiroga', region: 'Pátzcuaro-Zirahuén', lat: 19.665, lng: -101.5238 },
+  { id: 'patzcuaro', name: 'Pátzcuaro', region: 'Pátzcuaro-Zirahuén', lat: 19.5131, lng: -101.6094 },
+  { id: 'santa_clara', name: 'Salvador Escalante', region: 'Pátzcuaro-Zirahuén', lat: 19.4067, lng: -101.64 },
+  { id: 'tacambaro', name: 'Tacámbaro', region: 'Infiernillo', lat: 19.235, lng: -101.4572 },
+  { id: 'uruapan', name: 'Uruapan', region: 'Meseta Purépecha', lat: 19.4114, lng: -102.0579 },
+  { id: 'paracho', name: 'Paracho', region: 'Meseta Purépecha', lat: 19.6458, lng: -102.0464 },
+  { id: 'los_reyes', name: 'Los Reyes', region: 'Meseta Purépecha', lat: 19.5856, lng: -102.4706 },
+  { id: 'zamora', name: 'Zamora', region: 'Bajío', lat: 19.9858, lng: -102.2836 },
+  { id: 'jacona', name: 'Jacona', region: 'Bajío', lat: 19.9553, lng: -102.2933 },
+  { id: 'tangancicuaro', name: 'Tangancícuaro', region: 'Bajío', lat: 19.8875, lng: -102.2056 },
+  { id: 'la_piedad', name: 'La Piedad', region: 'Bajío', lat: 20.342, lng: -102.0293 },
+  { id: 'sahuayo', name: 'Sahuayo', region: 'Ciénega de Chapala', lat: 20.0566, lng: -102.7262 },
+  { id: 'apatzingan', name: 'Apatzingán', region: 'Tierra Caliente', lat: 19.0886, lng: -102.3506 },
+  { id: 'huetamo', name: 'Huetamo', region: 'Tierra Caliente', lat: 18.63, lng: -100.897 },
+  { id: 'lazaro_cardenas', name: 'Lázaro Cárdenas', region: 'Costa', lat: 17.9583, lng: -102.2 },
 ];
 export const municipality = (id) => MUNICIPALITIES.find((m) => m.id === id);
 

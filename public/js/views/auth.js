@@ -2,11 +2,12 @@ import { api } from '../api.js';
 import { afterLogin } from '../app.js';
 import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
 
+// Cuentas de la exposición: un recorrido limpio con los tres usuarios (y el admin aparte).
 const DEMO = [
-  ['Productor (Tarímbaro)', '4430000001'],
-  ['Comprador (Fonda en Morelia)', '4430000101'],
-  ['Transportista de Ramiro', '4430000201'],
-  ['Administrador', '4430000999'],
+  ['Cliente · Restaurante El Fogón', '4431000001', 'expo2026'],
+  ['Proveedor · Rancho La Esperanza', '4431000002', 'expo2026'],
+  ['Transportista del rancho · Luis Mendoza', '4431000003', 'expo2026'],
+  ['Administrador', '4430000999', 'demo1234'],
 ];
 
 export default async function authView({ app, opts, query }) {
@@ -31,9 +32,9 @@ function login(app) {
       <p class="center small" style="margin-top:12px">¿No tienes cuenta? <a href="#/registro">Regístrate gratis</a></p>
     </form>
     <div class="card" style="margin-top:14px">
-      <h3>Cuentas de demostración</h3>
-      <p class="small muted">Contraseña: <strong>demo1234</strong>. Datos ficticios.</p>
-      <div class="stack">${DEMO.map(([l, p]) => `<button class="btn ghost block" data-demo="${p}">${e(l)} · ${p}</button>`).join('')}</div>
+      <h3>Entrar rápido (exposición)</h3>
+      <p class="small muted">Toca una cuenta y entras directo. Datos ficticios.</p>
+      <div class="stack">${DEMO.map(([l, p, pw]) => `<button class="btn ghost block" data-demo="${p}" data-pw="${pw}">${e(l)}</button>`).join('')}</div>
     </div>
   </div>`;
   const f = $('#f');
@@ -41,7 +42,7 @@ function login(app) {
     const b = ev.target.closest('[data-demo]');
     if (!b) return;
     f.identifier.value = b.dataset.demo;
-    f.password.value = 'demo1234';
+    f.password.value = b.dataset.pw;
     f.requestSubmit();
   });
   f.addEventListener('submit', async (ev) => {

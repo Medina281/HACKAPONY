@@ -20,16 +20,30 @@ export function verifyPassword(pw, stored) {
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
+// Sesiones firmadas: si el servidor gratuito se reinicia y la base vuelve a la demo, la sesión sigue valiendo
+// (sólo si la cuenta sigue existiendo con el mismo teléfono). Requiere SESSION_SECRET en el entorno.
+const SECRET = process.env.SESSION_SECRET || '';
+const BOOT = Date.now();
+const sign = (s) => crypto.createHmac('sha256', SECRET).update(s).digest('base64url');
+
 export function createSession(db, userId, now) {
-  const token = crypto.randomBytes(32).toString('base64url');
+  let token = crypto.randomBytes(32).toString('base64url');
+  if (SECRET) {
+    const u = db.prepare('SELECT phone FROM users WHERE id = ?').get(userId);
+    const body = `${userId}.${Date.now()}.${sha(u?.phone || '').slice(0, 16)}.${crypto.randomBytes(9).toString('base64url')}`;
+    token = `${body}.${sign(body)}`;
+  }
   db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?,?,?)').run(
     sha(token), userId, now + SESSION_DAYS * 864e5,
   );
   return token;
 }
 
+const revoked = new Set();
 export function destroySession(db, token) {
-  if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha(token));
+  if (!token) return;
+  revoked.add(sha(token));
+  db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha(token));
 }
 
 export function parseCookies(header = '') {
@@ -57,7 +71,26 @@ export function userFromRequest(db, req, now) {
        WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`,
     )
     .get(sha(token), now);
-  return row || null;
+  if (row) return row;
+  return restoreSigned(db, token, now);
+}
+
+/** Sesión emitida ANTES de este arranque del servidor cuya fila se perdió al reiniciar la base. */
+function restoreSigned(db, token, now) {
+  if (!SECRET || revoked.has(sha(token))) return null;
+  const parts = token.split('.');
+  if (parts.length !== 5) return null;
+  const body = parts.slice(0, 4).join('.');
+  const mac = Buffer.from(parts[4]);
+  const exp = Buffer.from(sign(body));
+  if (mac.length !== exp.length || !crypto.timingSafeEqual(mac, exp)) return null;
+  const [uid, iat, phoneTag] = parts;
+  const issued = Number(iat);
+  if (!(issued < BOOT) || issued + SESSION_DAYS * 864e5 < Date.now()) return null; // cerradas en este arranque no vuelven
+  const u = db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(Number(uid));
+  if (!u || sha(u.phone).slice(0, 16) !== phoneTag) return null;
+  db.prepare('INSERT OR IGNORE INTO sessions (token_hash, user_id, expires_at) VALUES (?,?,?)').run(sha(token), u.id, issued + SESSION_DAYS * 864e5);
+  return u;
 }
 
 export function requireRole(user, ...roles) {

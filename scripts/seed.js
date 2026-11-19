@@ -32,7 +32,7 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
         `INSERT INTO users (role, name, business_name, business_type, email, phone, password_hash, municipality, pickup_point, is_demo, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,1,?)`,
       )
-      .run(u.role, u.name, u.business || null, u.type || null, u.email || null, u.phone, pw, u.muni, u.pickup || null, now - 20 * 24 * H);
+      .run(u.role, u.name, u.business || null, u.type || null, u.email || null, u.phone, u.password ? hashPassword(u.password) : pw, u.muni, u.pickup || null, now - 20 * 24 * H);
     users[key] = db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid);
   };
 
@@ -53,6 +53,21 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, employer_id=? WHERE phone='4430000201'").run(users.ramiro.id);
   db.prepare("UPDATE users SET vehicle='Camioneta refrigerada', capacity_kg=800, refrigerated=1, employer_id=? WHERE phone='4430000202'").run(users.encinos.id);
   for (const k of ['fletes1', 'fletes2']) users[k] = db.prepare('SELECT * FROM users WHERE id = ?').get(users[k].id);
+  // Más productores en otras regiones de Michoacán (para que el mapa muestre varias zonas)
+  addUser('apatz', { role: 'productor', name: 'Mario Ceja', business: 'Huertas de Tierra Caliente', phone: '4430000008', muni: 'apatzingan', pickup: 'Empacadora a la salida a Buenavista (ficticio)' });
+  addUser('reyes', { role: 'productor', name: 'Lucía Gómez', business: 'Berries Los Reyes', phone: '4430000009', muni: 'los_reyes', pickup: 'Centro de acopio, carretera a Peribán (ficticio)' });
+  addUser('zita', { role: 'productor', name: 'Raúl Arriaga', business: 'Huerta El Oriente', phone: '4430000010', muni: 'zitacuaro', pickup: 'Bodega en la entrada de Zitácuaro (ficticio)' });
+  addUser('tacam', { role: 'productor', name: 'Elvira Patiño', business: 'Aguacates Tacámbaro', phone: '4430000011', muni: 'tacambaro', pickup: 'Huerta en el camino a Pedernales (ficticio)' });
+  addUser('piedad', { role: 'productor', name: 'Ernesto Villa', business: 'Hortalizas La Piedad', phone: '4430000012', muni: 'la_piedad', pickup: 'Patio junto al libramiento (ficticio)' });
+  addUser('sahuayo', { role: 'productor', name: 'Gloria Ochoa', business: 'Rancho Sahuayo', phone: '4430000013', muni: 'sahuayo', pickup: 'Rancho a la orilla de la carretera a Jiquilpan (ficticio)' });
+  addUser('lazaro', { role: 'comprador', name: 'Pedro Salgado', business: 'Mariscos El Puerto', type: 'restaurante', phone: '4430000105', muni: 'lazaro_cardenas' });
+  addUser('hidalgo', { role: 'comprador', name: 'Irma Luna', business: 'Comedor Industrial Hidalgo', type: 'comedor', phone: '4430000106', muni: 'hidalgo' });
+
+  // Cuentas para la exposición (contraseña expo2026): un flujo limpio, sin pedidos previos
+  addUser('expoProd', { role: 'productor', name: 'Jose Luis Medina', business: 'Rancho La Esperanza', phone: '4431000002', muni: 'tarimbaro', pickup: 'Entrada del rancho, junto a la báscula (ficticio)', password: 'expo2026' });
+  addUser('expoBuyer', { role: 'comprador', name: 'Ana Torres', business: 'Restaurante El Fogón', type: 'restaurante', phone: '4431000001', muni: 'morelia', password: 'expo2026' });
+  addUser('expoDriver', { role: 'transportista', name: 'Luis Mendoza', phone: '4431000003', muni: 'tarimbaro', password: 'expo2026' });
+  db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, employer_id=? WHERE phone='4431000003'").run(users.expoProd.id);
   addUser('admin', { role: 'admin', name: 'Administración Raíz Directa', phone: '4430000999', email: 'admin@demo.mx', muni: 'morelia' });
 
   const opts = { uploadsDir: uploadsDir || path.join(ROOT, 'data', 'uploads'), isDemo: 1 };
@@ -122,6 +137,19 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(openDid);
   transition(db, t + 4 * 60e3, users.ramiro, zanFolio, 'confirmar');
   actOnDelivery(db, t + 5 * 60e3, users.ramiro, openDid, 'assign', { carrier_id: users.fletes1.id });
+  // Ofertas en otras regiones
+  lot('apatz', t, { product: 'Limón', category: 'fruta', quality: 'excedente', kg: 300, min_kg: 20, producer_transport: true, notes: 'Limón con semilla de Tierra Caliente.', ...R('Limón') });
+  lot('apatz', t, { product: 'Papaya', category: 'fruta', quality: 'maduro', kg: 120, min_kg: 10, notes: 'Maradol madura, para agua o licuado.', ...R('Papaya') });
+  lot('reyes', t, { product: 'Zarzamora', category: 'fruta', quality: 'imperfeccion', kg: 60, min_kg: 2, notes: 'Fuera de calibre de exportación; mismo sabor.', ...R('Zarzamora') });
+  lot('zita', t, { product: 'Manzana', category: 'fruta', quality: 'imperfeccion', kg: 90, min_kg: 5, ...R('Manzana') });
+  lot('tacam', t, { product: 'Aguacate', category: 'fruta', quality: 'excedente', kg: 150, min_kg: 10, producer_transport: true, ...R('Aguacate') });
+  lot('piedad', t, { product: 'Chile', category: 'verdura', quality: 'excedente', kg: 70, min_kg: 5, notes: 'Jalapeño.', ...R('Chile') });
+  lot('sahuayo', t, { product: 'Tomate verde', category: 'verdura', quality: 'excedente', kg: 110, min_kg: 10, ...R('Tomate verde') });
+
+  // Ofertas de la cuenta de exposición (entrega a domicilio con su propio transportista)
+  lot('expoProd', t, { product: 'Jitomate', category: 'verdura', quality: 'excedente', kg: 150, min_kg: 5, producer_transport: true, pickup_window: '8:00 a 18:00', notes: 'Saladette de primera que no alcanzó a salir al mercado.', ...R('Jitomate') });
+  lot('expoProd', t, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, min_kg: 5, producer_transport: true, notes: 'Hass maduro, ideal para guacamole del día.', ...R('Aguacate') });
+
   // Pedido pendiente de confirmar para un productor (panel con algo que atender)
   const guay = db.prepare("SELECT id FROM lots WHERE product='Guayaba' AND expires_at > ?").get(now).id;
   order('juguera', guay, 15, t + 3 * 60e3, 3);

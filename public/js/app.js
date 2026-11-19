@@ -110,6 +110,8 @@ function match(path) {
 async function router() {
   cleanups.forEach((f) => f());
   cleanups = [];
+  // Ningún cuadro de diálogo de la pantalla anterior se queda encima de la nueva
+  document.querySelectorAll('dialog').forEach((d) => { try { d.close(); } catch { /* ya cerrado */ } d.remove(); });
   const [path, qs] = (location.hash.slice(1) || '/').split('?');
   const query = Object.fromEntries(new URLSearchParams(qs || ''));
   // Elemento nuevo en cada navegación: así no se acumulan escuchadores de eventos entre vistas.
@@ -180,5 +182,9 @@ setInterval(pollNotifications, 30000);
 })();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').then((r) => r.update()).catch(() => {});
+  // Cuando se publica una versión nueva, la página se recarga una vez para no mezclar archivos viejos y nuevos.
+  let reloaded = false;
+  const hadController = !!navigator.serviceWorker.controller; // en la primera visita no hace falta recargar
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }

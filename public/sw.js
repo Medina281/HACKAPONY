@@ -1,8 +1,8 @@
 // Service worker: app instalable y consulta sin conexión.
-// - Interfaz: se guarda en caché y se actualiza en segundo plano.
+// - Interfaz: red primero (siempre la versión más nueva); sin red, la copia guardada.
 // - Datos GET (ofertas, pedidos, impacto): red primero; sin red se entrega la última copia marcada como desactualizada.
 // - Escrituras (apartar, publicar, entregar): NUNCA se guardan ni se simulan sin conexión.
-const VERSION = 'rd-v13';
+const VERSION = 'rd-v15';
 const SHELL = [
   '/', '/index.html', '/css/styles.css', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png',
   '/js/app.js', '/js/api.js', '/js/ui.js', '/js/shared/calc.js', '/js/shared/catalog.js', '/js/shared/parse.js',
@@ -10,7 +10,8 @@ const SHELL = [
   '/js/views/auth.js', '/js/views/producer.js', '/js/views/producerOrders.js', '/js/views/publish.js',
   '/js/views/buyer.js', '/js/views/impact.js', '/js/views/map.js', '/js/views/profile.js', '/js/views/admin.js',
   '/js/shared/shelf.js', '/js/weather.js', '/js/voice/speech.js', '/js/voice/assistant.js',
-  '/js/camera.js', '/js/views/carrier.js', '/js/views/trip.js', '/js/views/legal.js', '/fonts/dmsans.woff', '/icons.svg',
+  '/js/camera.js', '/js/views/carrier.js', '/js/views/trip.js', '/js/views/legal.js', '/js/views/team.js', '/js/views/track.js',
+  '/js/geo-share.js', '/js/shared/pricing.js', '/fonts/dmsans.woff', '/icons.svg',
 ];
 
 self.addEventListener('install', (ev) => {
@@ -48,14 +49,11 @@ self.addEventListener('fetch', (ev) => {
   }
 
   ev.respondWith(
-    caches.match(req).then((cached) => {
-      const net = fetch(req)
-        .then((res) => {
-          if (res.ok) caches.open(VERSION).then((c) => c.put(req, res.clone()));
-          return res;
-        })
-        .catch(() => cached || caches.match('/index.html'));
-      return cached || net;
-    }),
+    fetch(req)
+      .then((res) => {
+        if (res.ok) caches.open(VERSION).then((c) => c.put(req, res.clone()));
+        return res;
+      })
+      .catch(async () => (await caches.match(req)) || caches.match('/index.html')),
   );
 });

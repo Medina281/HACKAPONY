@@ -36,7 +36,7 @@ export default async function mapView({ app, state }) {
   const { lots } = await api('/api/lots');
   const byMuni = {};
   for (const l of lots) (byMuni[l.municipality] ||= []).push(l);
-  const groups = Object.entries(byMuni).map(([id, ls]) => ({ m: municipality(id), lots: ls }));
+  const groups = Object.entries(byMuni).map(([id, ls]) => ({ m: municipality(id), lots: ls })).filter((g) => g.m).sort((a, b) => (a.m.region || '').localeCompare(b.m.region || '') || a.m.name.localeCompare(b.m.name));
   const home = municipality(state.user?.municipality || 'morelia');
 
   const listHtml = (g) => g.lots.map((l) => `<a href="#/oferta/${l.id}" style="display:block;padding:4px 0">${productIcon(l.product)} ${e(l.product)} · ${kg(l.available_g)} · <strong>${mxn(l.rescue_price_c)}/kg</strong></a>`).join('');
@@ -60,13 +60,14 @@ export default async function mapView({ app, state }) {
       const n = g.lots.length;
       L.marker([g.m.lat, g.m.lng], {
         icon: L.divIcon({ className: '', html: `<div style="background:#0F4D3A;color:#fff;border-radius:999px;padding:5px 12px;font-family:DM Sans,system-ui,sans-serif;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25)">${e(g.m.name)} · ${n}</div>`, iconSize: null }),
-      }).addTo(map).bindPopup(`<strong>${e(g.m.name)}</strong><br>${listHtml(g)}`);
+      }).addTo(map).bindPopup(`<strong>${e(g.m.name)}</strong> <span style="color:#667">· región ${e(g.m.region || '')}</span><br>${listHtml(g)}`);
     }
+    if (groups.length) map.fitBounds(groups.map((g) => [g.m.lat, g.m.lng]).concat([[home.lat, home.lng]]), { padding: [40, 40], maxZoom: 10 });
   } catch (err) {
     $('#map').innerHTML = `<div class="empty"><div class="big"><svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg></div><p>${e(err.message)}. Te mostramos la lista por municipio (funciona sin mapa).</p></div>`;
     Object.assign($('#map').style, { height: 'auto', minHeight: '0' });
   }
   $('#fallback').innerHTML = groups.length
-    ? groups.map((g) => `<div class="card"><h3><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(g.m.name)} <span class="pill">${g.lots.length}</span></h3>${listHtml(g)}</div>`).join('')
+    ? groups.map((g) => `<div class="card"><h3><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(g.m.name)} <span class="pill">${g.lots.length}</span> <span class="tiny muted">región ${e(g.m.region || '')}</span></h3>${listHtml(g)}</div>`).join('')
     : '<p class="muted">No hay ofertas disponibles ahora.</p>';
 }
