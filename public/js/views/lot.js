@@ -1,3 +1,4 @@
+import { ensureGeo } from '../ui.js';
 import { api, serverNow } from '../api.js';
 import { go } from '../app.js';
 import { $, e, mxn, kg, media, statePill, timer, toast, fieldErrors, waLink, shareText, fmtDate, orderPill, shelfAnalysis } from '../ui.js';
@@ -8,6 +9,7 @@ import { refNote } from './components.js';
 const TRANSPORT_KEY = 'rd_transport';
 
 export default async function lotView({ app, params, state }) {
+  await ensureGeo();
   const { lot: l } = await api(`/api/lots/${params.id}`);
   const user = state.user;
   const isOwner = user && (user.id === l.producer.id || user.role === 'admin');
@@ -24,7 +26,7 @@ export default async function lotView({ app, params, state }) {
     <div class="layout-2">
       <div class="stack">
         <div class="lot" data-lot="${l.id}">
-          <div class="detail-head"><h1>${e(l.product)}</h1><p class="muted">${e(qualityLabel(l.quality))} · ${e(l.municipality_name)}</p></div>
+          <div class="detail-head"><h1>${e(l.product)}</h1><p class="muted">${e(qualityLabel(l.quality))} · ${e(l.municipality_name)}${l.state_name ? `, ${e(l.state_name)}` : ''}</p></div>
           <div class="lot-media detail-media">${media(l.photo, l.product)}${statePill(l.state)}<span class="disc">−${Math.round(l.discount)}%</span></div>
           <div class="lot-body">
             <div class="price-tab"><span class="muted small">Precio de rescate</span><div class="price">${mxn(l.rescue_price_c)}<small>/kg</small></div>
@@ -39,7 +41,7 @@ export default async function lotView({ app, params, state }) {
               <dt>Compra mínima</dt><dd>${l.allow_partial ? kg(l.min_g) : 'Sólo lote completo'}</dd>
               <dt>Estado declarado</dt><dd>${e(qualityLabel(l.quality))}<div class="tiny muted">${e(q?.hint || '')}</div></dd>
               <dt>Vende</dt><dd>${e(l.producer.name)}</dd>
-              <dt>Zona</dt><dd>${e(l.municipality_name)} <span class="muted small">(punto exacto al apartar)</span></dd>
+              <dt>Zona</dt><dd>${e(l.municipality_name)}${l.state_name ? `, ${e(l.state_name)}` : ''}${l.region && l.region !== l.state_name ? ` · región ${e(l.region)}` : ''} <span class="muted small">(punto exacto al apartar)</span></dd>
               <dt>Distancia</dt><dd>~${straight} km en línea recta desde ${e(from.name)} <span class="muted small">(≈${road} km por carretera, estimado)</span></dd>
               ${l.pickup_window ? `<dt>Horario</dt><dd>${e(l.pickup_window)}</dd>` : ''}
               <dt>Transporte</dt><dd>${l.producer_transport ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> El productor puede llevarlo (acordar costo)' : 'Recoge el comprador'}</dd>

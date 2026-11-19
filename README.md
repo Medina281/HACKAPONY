@@ -191,3 +191,13 @@ copy sniim_real_verificado.json src\data\           # (Windows) para que la app 
 ```
 
 Con ese archivo en `src/data/`, la app muestra “SNIIM real · corte AAAA-MM-DD” con enlace a la consulta. `scripts/sniim/sniimService.js` es el módulo para React (`catalogoSNIIM`, `obtenerPrecioRealSNIIM(productoId, estado)`). El script se escribió sin acceso de red al SNIIM: la lectura de tablas está probada con ejemplos, pero la primera corrida real hay que revisarla.
+
+## Estados y municipios reales (INEGI)
+
+`npm run municipios` (en Windows `npm.cmd run municipios`) descarga del INEGI (Catálogo Único de Claves Geoestadísticas, servicio `wscatgeo`) los 32 estados y sus ~2,478 municipios con las coordenadas reales de cada cabecera municipal, y los guarda en `src/data/municipios-inegi.json`. Con ese archivo:
+
+- Registro, perfil, publicar y entrega a domicilio piden **Estado → Municipio** con el catálogo completo.
+- Los municipios base (Morelia, Uruapan, Guadalajara…) toman las coordenadas reales del INEGI.
+- La demo agrega productores en municipios reales (Tancítaro, Zapopan, Atlixco, Tapachula, Fresnillo…).
+
+Sin el archivo, la app funciona con la lista base de ciudades.

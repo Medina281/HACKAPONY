@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer, muniOptions } from '../ui.js';
+import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer, ensureGeo, muniPicker, wireMuniPickers } from '../ui.js';
 import { qualityLabel, municipality, MUNICIPALITIES } from '../shared/catalog.js';
 import { reportDialog } from './lot.js';
 
@@ -10,6 +10,7 @@ const CANCEL_REASONS = {
 };
 
 export default async function orderView({ app, params, state }) {
+  await ensureGeo();
   const { order: o } = await api(`/api/orders/${params.folio}`);
   // El productor elige a quién de su personal manda; sólo hace falta la lista si hay entrega por asignar.
   const drivers = o.role === 'productor' && o.delivery && ['abierta', 'asignada'].includes(o.delivery.status)
@@ -88,6 +89,7 @@ export default async function orderView({ app, params, state }) {
     </div>
   </div>`;
 
+  wireMuniPickers(app);
   const reload = () => orderView({ app, params, state });
   const act = async (action, body = {}) => {
     try {
@@ -167,7 +169,7 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
       <button class="btn secondary" id="askTruck">Pedir entrega a domicilio</button>
       <form id="truckForm" class="stack" hidden>
         <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
-        <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${muniOptions(state.user.municipality)}</select></div>
+        ${muniPicker('to_muni', state.user.municipality)}
         <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
         <label class="inline-check"><input type="checkbox" id="useHere"><span>Usar mi ubicación actual como punto de entrega <span class="tiny muted">(más exacto para el tiempo de llegada)</span></span></label>
         <input type="hidden" name="dest_lat"><input type="hidden" name="dest_lng">

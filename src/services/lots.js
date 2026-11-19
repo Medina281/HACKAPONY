@@ -54,6 +54,8 @@ export function serializeLot(l, now, { viewer, from } = {}) {
     state: lotState(l, now),
     municipality: l.municipality,
     municipality_name: muni?.name,
+    state_name: muni?.state,
+    region: muni?.region,
     lat: muni?.lat,
     lng: muni?.lng,
     pickup_window: l.pickup_window,

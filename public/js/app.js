@@ -181,6 +181,8 @@ setInterval(pollNotifications, 30000);
   pollNotifications();
 })();
 
+import('./ui.js').then((u) => u.ensureGeo()); // catálogo de municipios en segundo plano
+
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('/sw.js').then((r) => r.update()).catch(() => {});
   // Cuando se publica una versión nueva, la página se recarga una vez para no mezclar archivos viejos y nuevos.

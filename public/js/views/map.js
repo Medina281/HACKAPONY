@@ -1,3 +1,4 @@
+import { ensureGeo } from '../ui.js';
 import { api } from '../api.js';
 import { $, e, mxn, kg } from '../ui.js';
 import { municipality, productIcon } from '../shared/catalog.js';
@@ -33,10 +34,11 @@ export function addTiles(L, map, maxZoom = 15) {
 }
 
 export default async function mapView({ app, state }) {
+  await ensureGeo();
   const { lots } = await api('/api/lots');
   const byMuni = {};
   for (const l of lots) (byMuni[l.municipality] ||= []).push(l);
-  const groups = Object.entries(byMuni).map(([id, ls]) => ({ m: municipality(id), lots: ls })).filter((g) => g.m).sort((a, b) => (a.m.region || '').localeCompare(b.m.region || '') || a.m.name.localeCompare(b.m.name));
+  const groups = Object.entries(byMuni).map(([id, ls]) => ({ m: municipality(id), lots: ls })).filter((g) => g.m).sort((a, b) => (a.m.state || '').localeCompare(b.m.state || '', 'es') || a.m.name.localeCompare(b.m.name, 'es'));
   const home = municipality(state.user?.municipality || 'morelia');
 
   const listHtml = (g) => g.lots.map((l) => `<a href="#/oferta/${l.id}" style="display:block;padding:4px 0">${productIcon(l.product)} ${e(l.product)} · ${kg(l.available_g)} · <strong>${mxn(l.rescue_price_c)}/kg</strong></a>`).join('');
@@ -68,6 +70,6 @@ export default async function mapView({ app, state }) {
     Object.assign($('#map').style, { height: 'auto', minHeight: '0' });
   }
   $('#fallback').innerHTML = groups.length
-    ? groups.map((g) => `<div class="card"><h3><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(g.m.name)} <span class="pill">${g.lots.length}</span> <span class="tiny muted">región ${e(g.m.region || '')}</span></h3>${listHtml(g)}</div>`).join('')
+    ? groups.map((g) => `<div class="card"><h3><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(g.m.name)} <span class="pill">${g.lots.length}</span> <span class="tiny muted">${e(g.m.state || '')}${g.m.region && g.m.region !== g.m.state ? ` · región ${e(g.m.region)}` : ''}</span></h3>${listHtml(g)}</div>`).join('')
     : '<p class="muted">No hay ofertas disponibles ahora.</p>';
 }

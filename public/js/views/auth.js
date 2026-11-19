@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { afterLogin } from '../app.js';
-import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
+import { $, e, toast, fieldErrors, ensureGeo, muniPicker, wireMuniPickers } from '../ui.js';
 
 
 export default async function authView({ app, opts, query }) {
@@ -43,7 +43,8 @@ function login(app) {
   });
 }
 
-function register(app, role) {
+async function register(app, role) {
+  await ensureGeo();
   role = role || 'comprador';
   app.innerHTML = `
   <div class="wrap page" style="max-width:520px">
@@ -82,7 +83,7 @@ function register(app, role) {
       </div>
       <div class="field"><label for="phone">Teléfono (WhatsApp)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="10 dígitos" required>
         <div class="hint">Con él entras y te contactan por WhatsApp. Sólo se comparte con quien tenga un pedido contigo.</div><div class="err" data-for="phone"></div></div>
-      <div class="field" id="muniField" ${role === 'transportista' ? 'hidden' : ''}><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
+      <div class="field" id="muniField" ${role === 'transportista' ? 'hidden' : ''}>${muniPicker('municipality', 'morelia')}</div>
       <div class="field"><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mínimo 8 caracteres.</div><div class="err" data-for="password"></div></div>
       <div class="field"><label for="email">Correo <span class="muted">(opcional)</span></label><input id="email" name="email" type="email" autocomplete="email"><div class="err" data-for="email"></div></div>
       <p class="tiny muted">Tus datos de contacto sólo se usan para coordinar pedidos. Lee el <a href="#/privacidad">aviso de privacidad</a>. El correo es opcional.</p>
@@ -90,6 +91,7 @@ function register(app, role) {
       <p class="center small" style="margin-top:12px">¿Ya tienes cuenta? <a href="#/entrar">Entra</a></p>
     </form>
   </div>`;
+  wireMuniPickers(app);
   const f = $('#f');
   let chosen = role;
   f.addEventListener('click', (ev) => {

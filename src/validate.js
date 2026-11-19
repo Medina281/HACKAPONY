@@ -1,6 +1,6 @@
 import { priceFor, TIERS } from '../public/js/shared/pricing.js';
 import { bad } from './http.js';
-import { CATEGORIES, MUNICIPALITIES, QUALITY } from '../public/js/shared/catalog.js';
+import { CATEGORIES, municipality as findMuni, QUALITY } from '../public/js/shared/catalog.js';
 import { kgToGrams, pesosToCents } from '../public/js/shared/calc.js';
 
 const str = (v, max = 200) => (v == null ? '' : String(v).trim().slice(0, max));
@@ -37,7 +37,7 @@ export function validateLot(b) {
   if (!CATEGORIES.some((c) => c.id === category)) e.category = 'Categoría no válida';
 
   const municipality = b.municipality;
-  if (!MUNICIPALITIES.some((m) => m.id === municipality)) e.municipality = 'Selecciona un municipio';
+  if (!findMuni(b.municipality)) e.municipality = 'Selecciona un municipio';
 
   if (b.declaration !== true) e.declaration = 'Confirma que el producto es apto para consumo';
 
@@ -97,7 +97,7 @@ export function validateRegistration(b) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Correo no válido';
   const password = String(b.password || '');
   if (password.length < 8) e.password = 'Mínimo 8 caracteres';
-  if (!MUNICIPALITIES.some((m) => m.id === b.municipality)) e.municipality = 'Selecciona tu municipio';
+  if (!findMuni(b.municipality)) e.municipality = 'Selecciona tu municipio';
   const business_name = str(b.business_name, 80) || (role === 'comprador' ? name || null : null);
   const capacity = b.capacity_kg === '' || b.capacity_kg == null ? null : Math.round(num(b.capacity_kg));
   if (role === 'transportista' && capacity != null && (!Number.isFinite(capacity) || capacity <= 0 || capacity > 40000)) e.capacity_kg = 'Carga máxima no válida';

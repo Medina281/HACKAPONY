@@ -11,19 +11,33 @@ import * as deliveries from './services/deliveries.js';
 import * as reference from './services/reference.js';
 import * as market from './services/market.js';
 import { validateRegistration, validatePhone, str } from './validate.js';
-import { MUNICIPALITIES, REPORT_REASONS } from '../public/js/shared/catalog.js';
+import { municipality, REPORT_REASONS, setMunicipios } from '../public/js/shared/catalog.js';
+import fs from 'node:fs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = () => Date.now(), uploadsDir, fetchImpl } = {}) {
   const db = openDb(dbPath);
   const uploads = uploadsDir || path.join(ROOT, 'data', 'uploads');
+  // Catálogo real de municipios del INEGI (si ya se descargó con `npm run municipios`)
+  const GEO_FILE = new URL('./data/municipios-inegi.json', import.meta.url);
+  let geoJson = '{"estados":[],"municipios":[]}';
+  try {
+    geoJson = fs.readFileSync(GEO_FILE, 'utf8');
+    setMunicipios(JSON.parse(geoJson));
+  } catch { /* sin archivo: sólo los municipios del catálogo base */ }
+
   const routes = [];
   const route = (method, pattern, handler) => {
     const keys = [];
     const re = new RegExp(`^${pattern.replace(/:(\w+)/g, (_, k) => (keys.push(k), '([^/]+)'))}$`);
     routes.push({ method, re, keys, handler });
   };
+
+  route('GET', '/api/geo', ({ res }) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return JSON.parse(geoJson);
+  });
 
   // ---------- Autenticación ----------
   route('POST', '/api/auth/register', ({ body, t, res }) => {
@@ -81,7 +95,7 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     if (!phone) e.phone = 'Teléfono de 10 dígitos';
     else if (db.prepare('SELECT 1 FROM users WHERE phone = ? AND id != ?').get(phone, user.id)) e.phone = 'Ya registrado';
     const muni = body.municipality ?? user.municipality;
-    if (!MUNICIPALITIES.some((m) => m.id === muni)) e.municipality = 'Municipio no válido';
+    if (!municipality(muni)) e.municipality = 'Municipio no válido';
     const name = body.name != null ? str(body.name, 80) : user.name;
     if (name.length < 2) e.name = 'Nombre requerido';
     if (Object.keys(e).length) throw bad('Revisa los datos', e);

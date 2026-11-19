@@ -1,6 +1,6 @@
 import { serverNow } from './api.js';
 import { formatRemaining, formatMXN, formatKg } from './shared/calc.js';
-import { productIcon, productIconName, stockPhoto, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
+import { productIcon, productIconName, stockPhoto, MUNICIPALITIES, ORDER_STATUS, municipality, allStates, municipalitiesOf, setMunicipios, geoLoaded } from './shared/catalog.js';
 
 /** Escapa texto para insertarlo en HTML (previene XSS). */
 export const e = (v) =>
@@ -24,7 +24,36 @@ export function toast(msg, type = '') {
 
 export const muniOptions = (selected, { any } = {}) =>
   (any ? `<option value="">${e(any)}</option>` : '') +
+  (selected && !MUNICIPALITIES.some((m) => m.id === selected) && municipality(selected) ? `<option value="${e(selected)}" selected>${e(municipality(selected).name)}, ${e(municipality(selected).state)}</option>` : '') +
   [...new Set(MUNICIPALITIES.map((m) => m.state))].map((st) => `<optgroup label="${e(st)}">${MUNICIPALITIES.filter((m) => m.state === st).map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</optgroup>`).join('');
+
+// ---------- Estado → Municipio (catálogo real del INEGI) ----------
+let geoPromise = null;
+/** Carga una sola vez el catálogo de municipios del INEGI (≈110 KB, queda en caché). */
+export function ensureGeo() {
+  if (geoLoaded()) return Promise.resolve();
+  geoPromise ||= fetch('/api/geo').then((r) => (r.ok ? r.json() : null)).then((d) => setMunicipios(d)).catch(() => {});
+  return geoPromise;
+}
+const muniOpts = (state, selected) => municipalitiesOf(state).map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('');
+/** Dos listas: primero el estado y luego sus municipios. Llama antes a ensureGeo(). */
+export function muniPicker(name, selected, { label = 'Municipio' } = {}) {
+  const m = municipality(selected) || municipality('morelia');
+  return `<div class="two muni-picker" data-muni-picker>
+    <div class="field" style="margin:0"><label for="${name}_estado">Estado</label><select id="${name}_estado" data-state>${allStates().map((s) => `<option ${s === m.state ? 'selected' : ''}>${e(s)}</option>`).join('')}</select></div>
+    <div class="field" style="margin:0"><label for="${name}">${e(label)}</label><select id="${name}" name="${name}">${muniOpts(m.state, m.id)}</select><div class="err" data-for="${name}"></div></div>
+  </div>`;
+}
+export function wireMuniPickers(root) {
+  root.querySelectorAll('[data-muni-picker]').forEach((w) => {
+    w.querySelector('[data-state]').addEventListener('change', (ev) => {
+      const sel = w.querySelector('select[name]');
+      sel.innerHTML = muniOpts(ev.target.value);
+      sel.dispatchEvent(new Event('input', { bubbles: true }));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+}
 
 /** Foto del productor; si no hay, foto real de referencia (Commons) etiquetada; sin red, ícono. */
 export function media(photo, product, cls = '') {

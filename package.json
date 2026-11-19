@@ -13,6 +13,7 @@
     "demo": "node --disable-warning=ExperimentalWarning scripts/seed.js && node --disable-warning=ExperimentalWarning server.js",
     "fotos": "node scripts/fetch-photos.js",
     "publico": "node --disable-warning=ExperimentalWarning scripts/publico.js",
-    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 test/*.test.js"
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 test/*.test.js",
+    "municipios": "node scripts/fetch-municipios.js"
   }
 }

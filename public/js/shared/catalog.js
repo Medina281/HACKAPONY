@@ -81,12 +81,12 @@ export const MUNICIPALITIES = [
   { id: 'cuitzeo', name: 'Cuitzeo', state: 'Michoacán', ref_state: 'Michoacán', region: 'Cuitzeo', lat: 19.9686, lng: -101.1394 },
   { id: 'puruandiro', name: 'Puruándiro', state: 'Michoacán', ref_state: 'Michoacán', region: 'Bajío', lat: 20.0878, lng: -101.5144 },
   { id: 'zinapecuaro', name: 'Zinapécuaro', state: 'Michoacán', ref_state: 'Michoacán', region: 'Oriente', lat: 19.8597, lng: -100.8264 },
-  { id: 'hidalgo', name: 'Ciudad Hidalgo', state: 'Michoacán', ref_state: 'Michoacán', region: 'Oriente', lat: 19.6922, lng: -100.5536 },
+  { id: 'hidalgo', inegi_name: 'Hidalgo', name: 'Ciudad Hidalgo', state: 'Michoacán', ref_state: 'Michoacán', region: 'Oriente', lat: 19.6922, lng: -100.5536 },
   { id: 'maravatio', name: 'Maravatío', state: 'Michoacán', ref_state: 'Michoacán', region: 'Oriente', lat: 19.8939, lng: -100.4433 },
   { id: 'zitacuaro', name: 'Zitácuaro', state: 'Michoacán', ref_state: 'Michoacán', region: 'Oriente', lat: 19.4357, lng: -100.357 },
   { id: 'quiroga', name: 'Quiroga', state: 'Michoacán', ref_state: 'Michoacán', region: 'Pátzcuaro-Zirahuén', lat: 19.665, lng: -101.5238 },
   { id: 'patzcuaro', name: 'Pátzcuaro', state: 'Michoacán', ref_state: 'Michoacán', region: 'Pátzcuaro-Zirahuén', lat: 19.5131, lng: -101.6094 },
-  { id: 'santa_clara', name: 'Salvador Escalante', state: 'Michoacán', ref_state: 'Michoacán', region: 'Pátzcuaro-Zirahuén', lat: 19.4067, lng: -101.64 },
+  { id: 'santa_clara', inegi_name: 'Salvador Escalante', name: 'Salvador Escalante', state: 'Michoacán', ref_state: 'Michoacán', region: 'Pátzcuaro-Zirahuén', lat: 19.4067, lng: -101.64 },
   { id: 'tacambaro', name: 'Tacámbaro', state: 'Michoacán', ref_state: 'Michoacán', region: 'Infiernillo', lat: 19.235, lng: -101.4572 },
   { id: 'uruapan', name: 'Uruapan', state: 'Michoacán', ref_state: 'Michoacán', region: 'Meseta Purépecha', lat: 19.4114, lng: -102.0579 },
   { id: 'paracho', name: 'Paracho', state: 'Michoacán', ref_state: 'Michoacán', region: 'Meseta Purépecha', lat: 19.6458, lng: -102.0464 },
@@ -100,7 +100,7 @@ export const MUNICIPALITIES = [
   { id: 'huetamo', name: 'Huetamo', state: 'Michoacán', ref_state: 'Michoacán', region: 'Tierra Caliente', lat: 18.63, lng: -100.897 },
   { id: 'lazaro_cardenas', name: 'Lázaro Cárdenas', state: 'Michoacán', ref_state: 'Michoacán', region: 'Costa', lat: 17.9583, lng: -102.2 },
   // Otras ciudades con central de abasto (coordenadas aproximadas del centro de la ciudad)
-  { id: 'cdmx', name: 'Ciudad de México (Iztapalapa)', state: 'Ciudad de México', ref_state: 'DF', region: 'Centro del país', lat: 19.3574, lng: -99.0906 },
+  { id: 'cdmx', inegi_name: 'Iztapalapa', name: 'Ciudad de México (Iztapalapa)', state: 'Ciudad de México', ref_state: 'DF', region: 'Centro del país', lat: 19.3574, lng: -99.0906 },
   { id: 'toluca', name: 'Toluca', state: 'Estado de México', ref_state: 'México', region: 'Centro del país', lat: 19.2826, lng: -99.6557 },
   { id: 'ecatepec', name: 'Ecatepec', state: 'Estado de México', ref_state: 'México', region: 'Centro del país', lat: 19.6018, lng: -99.0507 },
   { id: 'cuernavaca', name: 'Cuernavaca', state: 'Morelos', ref_state: 'Morelos', region: 'Centro del país', lat: 18.9242, lng: -99.2216 },
@@ -136,8 +136,39 @@ export const MUNICIPALITIES = [
   { id: 'campeche', name: 'Campeche', state: 'Campeche', ref_state: 'Campeche', region: 'Península', lat: 19.8301, lng: -90.5349 },
   { id: 'cancun', name: 'Cancún', state: 'Quintana Roo', ref_state: 'Quintana Roo', region: 'Península', lat: 21.1619, lng: -86.8515 },
 ];
-export const municipality = (id) => MUNICIPALITIES.find((m) => m.id === id);
-export const STATES_ORDER = [...new Set(MUNICIPALITIES.map((m) => m.state))];
+// ---------- Catálogo completo del INEGI (2,478 municipios, 32 estados) ----------
+// Se carga de src/data/municipios-inegi.json (scripts/fetch-municipios.js). Los municipios de arriba conservan
+// su identificador corto (ej. "morelia") y sustituyen a su equivalente del INEGI para no duplicarse.
+const STATE_SHORT = { 'Coahuila de Zaragoza': 'Coahuila', 'Michoacán de Ocampo': 'Michoacán', 'Veracruz de Ignacio de la Llave': 'Veracruz', 'México': 'Estado de México' };
+const REF_STATE = { 'Ciudad de México': 'DF', 'Estado de México': 'México' }; // claves del archivo de referencia de precios
+const INEGI = new Map();
+let STATES = [...new Set(MUNICIPALITIES.map((m) => m.state))];
+let geoSource = null;
+
+export function setMunicipios(data) {
+  if (!data?.municipios?.length) return;
+  INEGI.clear();
+  const ent = Object.fromEntries((data.estados || []).map((e) => [e.cve, STATE_SHORT[e.nombre] || e.nombre]));
+  const curatedBy = new Map(MUNICIPALITIES.map((m) => [`${m.state}|${normalize(m.inegi_name || m.name.replace(/\s*\(.*\)/, ''))}`, m]));
+  for (const [cvegeo, nombre, lat, lng, pob] of data.municipios) {
+    const state = ent[cvegeo.slice(0, 2)];
+    const cur = curatedBy.get(`${state}|${normalize(nombre)}`);
+    if (cur) { Object.assign(cur, { inegi: cvegeo, pob, lat, lng }); continue; } // coordenadas reales de la cabecera
+    INEGI.set(cvegeo, { id: cvegeo, inegi: cvegeo, name: nombre, state, ref_state: REF_STATE[state] || state, region: state, lat, lng, pob });
+  }
+  STATES = Object.values(ent).sort((a, b) => a.localeCompare(b, 'es'));
+  geoSource = data.fuente || 'INEGI';
+}
+export const geoLoaded = () => INEGI.size > 0;
+export const geoFuente = () => geoSource;
+export const municipality = (id) => MUNICIPALITIES.find((m) => m.id === id) || INEGI.get(id);
+export const allStates = () => STATES;
+export const STATES_ORDER = STATES;
+/** Municipios de un estado (los curados primero no: todo por orden alfabético). */
+export function municipalitiesOf(state) {
+  return [...MUNICIPALITIES.filter((m) => m.state === state), ...[...INEGI.values()].filter((m) => m.state === state)]
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
 
 // Estado declarado del producto. "No apto" NO existe como opción publicable.
 export const QUALITY = [

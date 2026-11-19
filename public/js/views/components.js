@@ -20,7 +20,7 @@ export function lotCard(l, { owner = false } = {}) {
     </a>
     <div class="lot-body">
       <div class="lot-title"><h3>${e(l.product)}</h3>${l.is_demo ? '<span class="pill demo" title="Dato de demostración">demo</span>' : ''}</div>
-      <div class="sub">${e(l.producer.name)} · ${e(l.municipality_name)}${l.distance_km != null ? ` · ~${l.distance_km} km` : ''}</div>
+      <div class="sub">${e(l.producer.name)} · ${e(l.municipality_name)}${l.state_name ? `, ${e(l.state_name)}` : ''}${l.distance_km != null ? ` · ~${l.distance_km} km` : ''}</div>
       <div class="meta"><span>${I('leaf')} ${e(qualityLabel(l.quality))}</span><span>${I('clock')} ${timer(l.expires_at)}</span>${l.producer_transport ? `<span>${I('truck')} Lo lleva</span>` : ''}${l.distance_km > 40 ? `<span title="Distancia en línea recta mayor a 40 km">${I('alert')} lejos</span>` : ''}</div>
       <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
       <div class="lot-foot">

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { onLeave } from '../app.js';
-import { $, $$, e, mxn, toast, fieldErrors, waLink, shareText, muniOptions } from '../ui.js';
+import { $, $$, e, mxn, toast, fieldErrors, waLink, shareText, ensureGeo, muniPicker, wireMuniPickers } from '../ui.js';
 import { PRODUCTS, QUALITY, CATEGORIES, normalize, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, discountPct, kgToGrams, pesosToCents } from '../shared/calc.js';
 import { priceFor, TIERS } from '../shared/pricing.js';
@@ -16,6 +16,7 @@ const DRAFT = 'rd_draft';
 const QUICK = ['Jitomate', 'Aguacate', 'Fresa', 'Zarzamora', 'Guayaba', 'Limón', 'Mango', 'Tomate verde', 'Calabacita', 'Cebolla', 'Papa', 'Chile', 'Plátano', 'Durazno'];
 
 export default async function publish({ app, query, state }) {
+  await ensureGeo();
   const user = state.user;
   let start = null;
   let photo = null;
@@ -125,7 +126,7 @@ export default async function publish({ app, query, state }) {
             <div class="field"><label for="min_kg">Compra mínima</label><div class="input-unit"><input id="min_kg" name="min_kg" inputmode="decimal" value="${v('min_kg')}" placeholder="1"><span>kg</span></div><div class="err" data-for="min_kg"></div></div>
             <div class="field"><label for="category">Categoría</label><select id="category" name="category">${CATEGORIES.map((c) => `<option value="${c.id}" ${initial.category === c.id ? 'selected' : ''}>${e(c.label)}</option>`).join('')}</select></div>
           </div>
-          <div class="field"><label for="municipality">Municipio de recolección</label><select id="municipality" name="municipality">${muniOptions(initial.municipality)}</select><div class="hint">Se usa para la distancia y el clima. En el tablero sólo se muestra el municipio.</div><div class="err" data-for="municipality"></div></div>
+          <div class="field">${muniPicker('municipality', initial.municipality, { label: 'Municipio de recolección' })}<div class="hint">Se usa para la distancia y el clima. En el tablero sólo se muestra el municipio.</div><div class="err" data-for="municipality"></div></div>
           <div class="field"><label class="inline-check"><input type="checkbox" name="allow_partial" ${initial.allow_partial !== false ? 'checked' : ''}><span>Acepto vender por partes (no sólo el lote completo)</span></label></div>
           <div class="field"><label for="pickup_point">Punto de recolección</label><input id="pickup_point" name="pickup_point" value="${v('pickup_point')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Sólo lo verá quien aparte.</div></div>
           <div class="field"><label for="pickup_window">Horario para recoger</label><input id="pickup_window" name="pickup_window" value="${v('pickup_window')}" placeholder="Ej. 7:00 a 13:00"></div>
@@ -140,6 +141,7 @@ export default async function publish({ app, query, state }) {
     </div>
   </div>`;
 
+  wireMuniPickers(app);
   const f = $('#pf');
   const get = () => {
     const d = Object.fromEntries(new FormData(f));
@@ -152,6 +154,13 @@ export default async function publish({ app, query, state }) {
     if (val == null) return;
     if (f[k]?.type === 'checkbox') f[k].checked = !!val;
     else if (k === 'quality') $$('input[name=quality]', f).forEach((r) => (r.checked = r.value === val));
+    else if (k === 'municipality' && f.municipality && ![...f.municipality.options].some((o) => o.value === val) && municipality(val)) {
+      // municipio de otro estado: primero se cambia el estado y luego se elige el municipio
+      const st = $('#municipality_estado', f);
+      st.value = municipality(val).state;
+      st.dispatchEvent(new Event('change', { bubbles: true }));
+      f.municipality.value = val;
+    }
     else if (f[k]) f[k].value = val;
   };
   const autoCategory = () => {

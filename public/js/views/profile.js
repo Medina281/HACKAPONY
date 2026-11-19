@@ -1,8 +1,9 @@
 import { api } from '../api.js';
 import { state, renderNav } from '../app.js';
-import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
+import { $, e, toast, fieldErrors, ensureGeo, muniPicker, wireMuniPickers } from '../ui.js';
 
 export default async function profile({ app }) {
+  await ensureGeo();
   const u = state.user;
   const isProducer = u.role === 'productor';
   app.innerHTML = `
@@ -13,7 +14,7 @@ export default async function profile({ app }) {
       <div class="field"><label for="name">Nombre</label><input id="name" name="name" value="${e(u.name)}"><div class="err" data-for="name"></div></div>
       <div class="field"><label for="business_name">${isProducer ? 'Huerta o negocio' : 'Negocio'}</label><input id="business_name" name="business_name" value="${e(u.business_name || '')}"></div>
       <div class="field"><label for="phone">WhatsApp</label><input id="phone" name="phone" inputmode="tel" value="${e(u.phone || '')}"><div class="hint">Para la demo puedes poner tu propio número y probar los mensajes.</div><div class="err" data-for="phone"></div></div>
-      <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions(u.municipality)}</select><div class="err" data-for="municipality"></div></div>
+      <div class="field">${muniPicker('municipality', u.municipality)}</div>
       ${isProducer ? `<div class="field"><label for="pickup_point">Punto de recolección habitual</label><input id="pickup_point" name="pickup_point" value="${e(u.pickup_point || '')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Se usa por defecto al publicar. Sólo lo ven compradores con pedido.</div></div>` : ''}
       ${u.role === 'transportista' ? `<div class="field"><label for="vehicle">Vehículo</label><input id="vehicle" name="vehicle" value="${e(u.vehicle || '')}"></div>
       <div class="field"><label for="capacity_kg">Carga máxima (kg)</label><input id="capacity_kg" name="capacity_kg" inputmode="numeric" value="${e(u.capacity_kg || '')}"><div class="err" data-for="capacity_kg"></div></div>
@@ -23,6 +24,7 @@ export default async function profile({ app }) {
     <div class="card stack" style="margin-top:14px"><h3>Mis reportes</h3><div id="myReports" class="small muted">Cargando…</div></div>
     <p class="small" style="margin-top:14px"><a href="#/privacidad">Aviso de privacidad</a> · <a href="#/creditos">Créditos de fotos y datos</a></p>
   </div>`;
+  wireMuniPickers(app);
   api('/api/reports/mine').then(({ reports }) => {
     $('#myReports').innerHTML = reports.length
       ? reports.map((r) => `<div style="padding:6px 0;border-top:1px solid var(--line)"><strong>#${r.id}</strong> · ${e(r.product || r.folio || '')} · <span class="pill ${r.status === 'abierto' ? 'warn' : 'muted'}">${e(r.status)}</span>${r.resolution ? `<div>${e(r.resolution)}</div>` : ''}</div>`).join('')

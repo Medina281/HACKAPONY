@@ -8,7 +8,7 @@ import { hashPassword } from '../src/auth.js';
 import { createLot } from '../src/services/lots.js';
 import { reserve, transition } from '../src/services/orders.js';
 import { requestDelivery, actOnDelivery } from '../src/services/deliveries.js';
-import { municipality } from '../public/js/shared/catalog.js';
+import { municipality, municipalitiesOf, setMunicipios, normalize } from '../public/js/shared/catalog.js';
 import { referenceFor } from '../src/services/reference.js';
 
 // Precio del productor y horas de frescura de la demo tomados de la referencia regional del equipo
@@ -71,6 +71,26 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, employer_id=? WHERE phone='4431000003'").run(users.expoProd.id);
   db.prepare("UPDATE users SET team_code = 'EXPO26' WHERE phone = '4431000002'").run(); // código de equipo para registrar transportistas en vivo
   addUser('admin', { role: 'admin', name: 'Administración Raíz Directa', phone: '4430000999', email: 'admin@demo.mx', muni: 'morelia' });
+
+  // Productores en municipios reales del catálogo del INEGI (sólo si ya se descargó con `npm run municipios`)
+  try { setMunicipios(JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'municipios-inegi.json'), 'utf8'))); } catch { /* sin catálogo */ }
+  const findMuni = (state, name) => municipalitiesOf(state).find((m) => normalize(m.name) === normalize(name))?.id || null;
+  const INEGI_DEMO = [
+    ['Michoacán', 'Tancítaro', 'Aguacateros de Tancítaro', 'Aguacate', 'excedente', 300],
+    ['Michoacán', 'Zacapu', 'Hortalizas de Zacapu', 'Lechuga', 'imperfeccion', 80],
+    ['Jalisco', 'Zapopan', 'Huerta Zapopan', 'Jitomate', 'maduro', 150],
+    ['Jalisco', 'Tlajomulco de Zúñiga', 'Berries Tlajomulco', 'Zarzamora', 'excedente', 90],
+    ['Guanajuato', 'Silao de la Victoria', 'Brócoli y más Silao', 'Zanahoria', 'excedente', 200],
+    ['Puebla', 'Atlixco', 'Huertos de Atlixco', 'Nopal', 'excedente', 120],
+    ['Estado de México', 'Texcoco', 'Productores de Texcoco', 'Cilantro', 'maduro', 50],
+    ['Baja California', 'Ensenada', 'Valle de Ensenada', 'Cebolla', 'excedente', 250],
+    ['Sinaloa', 'Navolato', 'Agrícola Navolato', 'Chile', 'excedente', 200],
+    ['Chiapas', 'Tapachula', 'Frutas del Soconusco', 'Plátano', 'maduro', 400],
+    ['Veracruz', 'Córdoba', 'Cítricos de Córdoba', 'Naranja', 'excedente', 350],
+    ['Yucatán', 'Valladolid', 'Huertos del Oriente Maya', 'Papaya', 'maduro', 150],
+    ['Zacatecas', 'Fresnillo', 'Campos de Fresnillo', 'Papa', 'imperfeccion', 300],
+  ].map(([state, name, business, product, quality, kg]) => ({ muni: findMuni(state, name), business, product, quality, kg })).filter((x) => x.muni);
+  INEGI_DEMO.forEach((x, i) => addUser(`inegi${i}`, { role: 'productor', name: x.business, business: x.business, phone: String(4439300000 + i), muni: x.muni, pickup: `Bodega en ${municipality(x.muni).name} (ficticio)` }));
 
   const opts = { uploadsDir: uploadsDir || path.join(ROOT, 'data', 'uploads'), isDemo: 1 };
   const lot = (who, at, b) => createLot(db, at, users[who], { declaration: true, ...b }, opts);
@@ -185,6 +205,11 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   addUser('cdmxBuyer', { role: 'comprador', name: 'Laura Ríos', business: 'Comedor Industrial Iztapalapa', type: 'comedor', phone: '4439200001', muni: 'cdmx' });
   addUser('gdlBuyer', { role: 'comprador', name: 'Jorge Lara', business: 'Restaurante Tapatío', type: 'restaurante', phone: '4439200002', muni: 'guadalajara' });
   addUser('mtyBuyer', { role: 'comprador', name: 'Sofía Garza', business: 'Juguería Regia', type: 'jugueria', phone: '4439200003', muni: 'monterrey' });
+
+  INEGI_DEMO.forEach((x, i) => {
+    const ref = R(x.product, municipality(x.muni).ref_state);
+    lot(`inegi${i}`, t - (i % 3) * 0.25 * (ref.hours || 24) * H, { product: x.product, quality: x.quality, kg: x.kg, min_kg: 10, producer_transport: i % 2 === 0, ...ref });
+  });
 
   // Ofertas de la cuenta de exposición (entrega a domicilio con su propio transportista)
   lot('expoProd', t, { product: 'Jitomate', category: 'verdura', quality: 'excedente', kg: 150, min_kg: 5, producer_transport: true, pickup_window: '8:00 a 18:00', notes: 'Saladette de primera que no alcanzó a salir al mercado.', ...R('Jitomate') });
