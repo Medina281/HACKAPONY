@@ -17,7 +17,7 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'geolocation=(self), microphone=(self), camera=(self)',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-    "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://unpkg.com https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org; connect-src 'self' https://api.open-meteo.com; " +
+    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com https://unpkg.com https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org; connect-src 'self' https://api.open-meteo.com; " +
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 };
 

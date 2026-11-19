@@ -39,10 +39,19 @@ export default async function mapView({ app, state }) {
   try {
     const L = await loadLeaflet();
     const map = L.map('map', { scrollWheelZoom: false }).setView([home.lat, home.lng], 8);
-    // Teselas CARTO (datos de OpenStreetMap): gratuitas con atribución y de estilo claro.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 15, subdomains: 'abcd', attribution: '© colaboradores de OpenStreetMap · © CARTO',
+    // Teselas de OpenStreetMap (gratuitas, sin clave; exigen atribución y que el navegador envíe el sitio de origen).
+    // Si fallan varias, se cambia a Esri World Street Map (también sin clave).
+    let fails = 0;
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 15, attribution: '© colaboradores de OpenStreetMap',
     }).addTo(map);
+    osm.on('tileerror', () => {
+      if (++fails !== 4) return;
+      map.removeLayer(osm);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 15, attribution: 'Teselas © Esri — fuentes: Esri, HERE, Garmin, © colaboradores de OpenStreetMap',
+      }).addTo(map);
+    });
     L.circleMarker([home.lat, home.lng], { radius: 8, color: '#0F4D3A', fillColor: '#3FD39A', fillOpacity: 1, weight: 3 }).addTo(map).bindTooltip(`Tú: ${home.name}`);
     for (const g of groups) {
       const n = g.lots.length;
