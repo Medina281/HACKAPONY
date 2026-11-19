@@ -147,6 +147,12 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_notif_user ON notifications(user_id, read);
   `,
+  // v2: cómo se capturó la publicación y la estimación de vida útil por clima (instantánea al publicar)
+  `
+  ALTER TABLE lots ADD COLUMN input_method TEXT NOT NULL DEFAULT 'formulario'
+    CHECK (input_method IN ('formulario','voz','frase'));
+  ALTER TABLE lots ADD COLUMN shelf_json TEXT;
+  `,
 ];
 
 export function openDb(file) {

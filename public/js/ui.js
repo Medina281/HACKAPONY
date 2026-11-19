@@ -50,8 +50,41 @@ export const orderPill = (s) => {
 /** Temporizador: se calcula desde la fecha de vencimiento persistida y la hora del servidor. */
 export const timer = (expiresAt) => `<span class="timer" data-expires="${expiresAt}">--:--:--</span>`;
 
+const fmtElapsed = (ms) => {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+};
+
+/** Análisis de vida útil en vivo: tiempo transcurrido desde la publicación y fase. */
+export function shelfAnalysis(l) {
+  const s = l.shelf;
+  return `<div class="card stack shelf-card" data-life-from="${l.created_at}" data-life-to="${l.expires_at}">
+    <div class="row between"><h3 style="margin:0">🌿 Vida útil</h3><span class="pill" data-life-phase>…</span></div>
+    <div class="bar" aria-hidden="true"><i data-life-bar style="width:0%"></i></div>
+    <dl class="kv small">
+      <dt>Publicado hace</dt><dd data-life-elapsed>…</dd>
+      <dt>Frescura declarada</dt><dd>${l.fresh_hours} h (por el productor)</dd>
+      ${s ? `<dt>Estimación por clima</dt><dd>~${s.hours} h <span class="muted">(rango ${s.low}–${s.high} h; ${s.source === 'open-meteo' ? `promedio previsto ${s.temp_mean} °C, máx. ${s.temp_max} °C` : `clima indicado por el productor, ~${s.temp_mean} °C`})</span></dd>` : '<dt>Estimación por clima</dt><dd class="muted">No se registró al publicar</dd>'}
+    </dl>
+    ${s && l.fresh_hours > s.high ? '<div class="notice small">La frescura declarada es mayor que la estimada para el clima de ese día. Revisa el producto al recogerlo.</div>' : ''}
+    <p class="tiny muted" style="margin:0">Estimación orientativa al momento de publicar; no certifica inocuidad.${s?.source === 'open-meteo' ? ' Clima: Open-Meteo.com (CC BY 4.0).' : ''}</p>
+  </div>`;
+}
+const PHASES = [[1, 'Ventana terminada', 'danger'], [0.8, 'Último momento', 'warn'], [0.5, 'Usar pronto', 'info'], [0, 'Fresco', 'ok']];
+
 export function tickTimers() {
   const now = serverNow();
+  for (const el of $$('[data-life-from]')) {
+    const from = Number(el.dataset.lifeFrom);
+    const to = Number(el.dataset.lifeTo);
+    const used = Math.min(1, Math.max(0, (now - from) / (to - from)));
+    const [, label, tone] = PHASES.find(([min]) => used >= min);
+    const pill = $('[data-life-phase]', el);
+    pill.textContent = `${label} · ${Math.round(used * 100)}%`;
+    pill.className = `pill ${tone}`;
+    $('[data-life-bar]', el).style.width = `${Math.round(used * 100)}%`;
+    $('[data-life-elapsed]', el).textContent = fmtElapsed(now - from);
+  }
   for (const el of $$('[data-expires]')) {
     const left = Number(el.dataset.expires) - now;
     el.textContent = formatRemaining(left);

@@ -42,6 +42,8 @@ Preparación: `npm run demo`, dos navegadores (o celular + laptop), el dashboard
 5. **Impacto → Sólo reales**: 20 kg rescatados · $240 para el productor · $260 de ahorro.
 6. (Si sobra tiempo) Intentar apartar 999 kg → “Sólo quedan 80 kg”.
 
+**Variante con el asistente de voz (diferenciador, ~40 s):** *Publicar hablando* → mantener 🎤 y decir “Tengo cien kilos de jitomate a doce pesos el kilo, normalmente a veinticinco, me quedan hasta mañana” → el asistente anota los datos, pregunta el estado y, como “hasta mañana” no es un número, pregunta las horas ofreciendo la estimación por clima → resumen → marcar declaración → ✅ Publicar. Ensayarlo antes en el teléfono del evento con Chrome, con internet y con el permiso del micrófono ya concedido.
+
 Respaldo: si falla el Wi-Fi, todo corre en `localhost`; sólo el mapa necesita internet y tiene lista de respaldo. Llevar capturas de pantalla y el `.zip` en USB.
 
 ## 5. Preguntas del jurado
@@ -73,6 +75,10 @@ Respaldo: si falla el Wi-Fi, todo corre en `localhost`; sólo el mapa necesita i
 **¿Por qué es pertinente para México?** Usa lo que ya existe: celular, WhatsApp, efectivo o transferencia, venta de proximidad. Michoacán concentra producción perecedera de alto valor y tiene una red densa de fondas y fruterías urbanas.
 
 **¿Cómo escalaría a otros estados?** Catálogo de municipios y productos configurable, base de datos estándar (migrable a PostgreSQL), sin dependencias de terceros. Se replica por regiones con un “operador local” que active a la oferta.
+
+**¿Por qué no usan IA para entender la voz?** Usamos el reconocimiento de voz gratuito del navegador y un intérprete por reglas, auditable y probado con 25 pruebas. Sin costos por uso y sin inventar datos: lo que no entiende, lo pregunta.
+
+**¿Qué tan confiable es la vida útil por clima?** Es orientativa: combina la perecibilidad por tasa de respiración (Kader), el estado declarado y la temperatura prevista de Open-Meteo con la regla Q10. Las horas base son supuestos que hay que calibrar con productores; por eso es una sugerencia y la decisión es del agricultor.
 
 **¿Qué está implementado y qué es futuro?** Implementado: todo lo de la tabla del README, probado. Futuro: validar precios con SNIIM, notificaciones por SMS/WhatsApp Business, reputación, pagos integrados, aviso de privacidad formal, distancias reales por carretera.
 

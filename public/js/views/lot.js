@@ -1,6 +1,6 @@
 import { api, serverNow } from '../api.js';
 import { go } from '../app.js';
-import { $, e, mxn, kg, media, statePill, timer, toast, fieldErrors, waLink, shareText, fmtDate, orderPill } from '../ui.js';
+import { $, e, mxn, kg, media, statePill, timer, toast, fieldErrors, waLink, shareText, fmtDate, orderPill, shelfAnalysis } from '../ui.js';
 import { qualityLabel, QUALITY, REPORT_REASONS, municipality } from '../shared/catalog.js';
 import { orderTotals, discountPct, netSavings, haversineKm, ROAD_FACTOR, kgToGrams, pesosToCents } from '../shared/calc.js';
 import { refNote } from './components.js';
@@ -44,6 +44,7 @@ export default async function lotView({ app, params, state }) {
             <p class="tiny muted">El productor declaró que el producto es apto para consumo humano. El temporizador es una estimación comercial y no certifica la inocuidad del alimento. Revisa el producto al recogerlo.</p>
           </div>
         </div>
+        ${shelfAnalysis(l)}
         ${refNote}
       </div>
       <div class="aside stack" id="side"></div>

@@ -2,13 +2,14 @@
 // - Interfaz: se guarda en caché y se actualiza en segundo plano.
 // - Datos GET (ofertas, pedidos, impacto): red primero; sin red se entrega la última copia marcada como desactualizada.
 // - Escrituras (apartar, publicar, entregar): NUNCA se guardan ni se simulan sin conexión.
-const VERSION = 'rd-v1';
+const VERSION = 'rd-v2';
 const SHELL = [
   '/', '/index.html', '/css/styles.css', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png',
   '/js/app.js', '/js/api.js', '/js/ui.js', '/js/shared/calc.js', '/js/shared/catalog.js', '/js/shared/parse.js',
   '/js/views/landing.js', '/js/views/market.js', '/js/views/lot.js', '/js/views/components.js', '/js/views/order.js',
   '/js/views/auth.js', '/js/views/producer.js', '/js/views/producerOrders.js', '/js/views/publish.js',
   '/js/views/buyer.js', '/js/views/impact.js', '/js/views/map.js', '/js/views/profile.js', '/js/views/admin.js',
+  '/js/shared/shelf.js', '/js/weather.js', '/js/voice/speech.js', '/js/voice/assistant.js',
 ];
 
 self.addEventListener('install', (ev) => {

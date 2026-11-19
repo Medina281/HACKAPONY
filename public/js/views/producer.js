@@ -1,6 +1,8 @@
 import { api } from '../api.js';
 import { e, mxn, kg, statePill, timer, empty, media } from '../ui.js';
 
+const lifeUsed = (l) => Math.min(100, Math.max(0, Math.round(((Date.now() - l.created_at) / (l.expires_at - l.created_at)) * 100)));
+
 export default async function producer({ app, state }) {
   const [{ summary: s, lots }, { orders }] = await Promise.all([api('/api/producer/summary'), api('/api/orders?as=productor')]);
   const toConfirm = orders.filter((o) => o.status === 'apartado').length;
@@ -14,7 +16,7 @@ export default async function producer({ app, state }) {
       <div class="grow" style="min-width:0">
         <div class="row between"><strong>${e(l.product)}</strong>${statePill(l.state)}</div>
         <div class="small muted">${kg(l.available_g)} libres · ${kg(l.reserved_g)} apartados · ${kg(l.delivered_g)} entregados · ${mxn(l.rescue_price_c)}/kg</div>
-        ${['disponible', 'por_vencer'].includes(l.state) ? `<div class="small">⏱ ${timer(l.expires_at)}${l.suggestion ? ' · <span class="pill warn">💡 sugerencia de precio</span>' : ''}</div>` : `<div class="small muted">Recuperado: ${mxn(l.income_c)}</div>`}
+        ${['disponible', 'por_vencer'].includes(l.state) ? `<div class="small">⏱ ${timer(l.expires_at)} · 🌿 ${lifeUsed(l)}% de vida útil usada${l.shelf ? ` · clima ~${l.shelf.hours} h` : ''}${l.suggestion ? ' · <span class="pill warn">💡 sugerencia de precio</span>' : ''}</div>` : `<div class="small muted">Recuperado: ${mxn(l.income_c)}</div>`}
       </div>
       <div class="stack" style="flex:none">
         <a class="btn sm secondary" href="#/oferta/${l.id}">Ver</a>

@@ -1,9 +1,13 @@
 import { api } from '../api.js';
 import { onLeave } from '../app.js';
-import { $, $$, e, mxn, toast, fieldErrors, shrinkImage, waLink, shareText } from '../ui.js';
-import { PRODUCTS, QUALITY, CATEGORIES, normalize } from '../shared/catalog.js';
+import { $, $$, e, mxn, toast, fieldErrors, shrinkImage, waLink, shareText, muniOptions } from '../ui.js';
+import { PRODUCTS, QUALITY, CATEGORIES, normalize, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, discountPct, kgToGrams, pesosToCents } from '../shared/calc.js';
 import { parseSpoken } from '../shared/parse.js';
+import { estimateShelfLife, CLASS_LABEL } from '../shared/shelf.js';
+import { getForecast, manualForecast, MANUAL_CLIMATES, WEATHER_CREDIT } from '../weather.js';
+import { mountAssistant } from '../voice/assistant.js';
+import { canRecognize } from '../voice/speech.js';
 import { lotCard } from './components.js';
 
 const DRAFT = 'rd_draft';
@@ -13,20 +17,24 @@ export default async function publish({ app, query, state }) {
   const user = state.user;
   let start = null;
   let photo = null;
-  let initial = { quality: 'excedente', hours: '', allow_partial: true, pickup_point: user.pickup_point || '' };
+  let method = 'formulario';
+  let forecast = null; // { source, temps, humidity }
+  let shelf = null;
+  let climateMuni = null;
+  let initial = { hours: '', allow_partial: true, pickup_point: user.pickup_point || '', municipality: user.municipality };
   let source = '';
 
-  const [{ templates }] = await Promise.all([api('/api/templates').catch(() => ({ templates: [] }))]);
+  const { templates } = await api('/api/templates').catch(() => ({ templates: [] }));
   if (query.from) {
     const { lot } = await api(`/api/lots/${query.from}`);
     initial = {
-      product: lot.product, category: lot.category, quality: lot.quality, kg: lot.total_g / 1000,
+      ...initial, product: lot.product, category: lot.category, quality: lot.quality, kg: lot.total_g / 1000,
       min_kg: lot.min_g / 1000, allow_partial: lot.allow_partial, ref_price: lot.ref_price_c / 100,
       rescue_price: lot.original_rescue_price_c / 100, hours: lot.fresh_hours, pickup_point: lot.pickup_point || '',
-      pickup_window: lot.pickup_window || '', producer_transport: lot.producer_transport, notes: lot.notes || '',
+      pickup_window: lot.pickup_window || '', producer_transport: lot.producer_transport, notes: lot.notes || '', municipality: lot.municipality,
     };
     source = `Copiamos los datos de tu publicación anterior de ${e(lot.product)}. Revisa kilos, precio y horas.`;
-  } else {
+  } else if (!query.nuevo) {
     const draft = JSON.parse(localStorage.getItem(DRAFT) || 'null');
     if (draft && draft.product) {
       initial = { ...initial, ...draft };
@@ -43,16 +51,15 @@ export default async function publish({ app, query, state }) {
         ${source ? `<div class="notice info">${source} <button type="button" class="btn ghost sm" id="discard">Empezar de cero</button></div>` : ''}
 
         <div class="card quick">
-          <div class="voice" id="voiceBox">
-            <button type="button" class="mic-big" id="mic" aria-label="Dictar con voz">🎤</button>
-            <div>
-              <strong id="micLabel">Toca y dime qué vendes</strong>
-              <div class="small muted">“Tengo 100 kilos de jitomate a 12 pesos, normalmente a 25, me quedan 24 horas”</div>
-            </div>
-          </div>
-          <div class="hint" id="heard" hidden></div>
+          <button type="button" class="voice voice-launch" id="openVA">
+            <span class="mic-big" aria-hidden="true">🎤</span>
+            <span class="voice-text">
+              <strong>${canRecognize ? 'Publicar hablando' : 'Publicar escribiendo como en WhatsApp'}</strong>
+              <span class="small muted">${canRecognize ? 'Dímelo como un mensaje de voz; te pregunto lo que falte y tú confirmas.' : 'Tu navegador no permite dictar; escríbeme y lleno el formulario.'}</span>
+            </span>
+          </button>
 
-          <button type="button" class="link-toggle" id="writeToggle" aria-expanded="false" aria-controls="writeBox">✍️ ¿Prefieres escribirlo?</button>
+          <button type="button" class="link-toggle" id="writeToggle" aria-expanded="false" aria-controls="writeBox">✍️ ¿Prefieres escribirlo aquí?</button>
           <div id="writeBox" class="write-box" hidden>
             <p class="phrase" aria-label="Frase para completar">
               Tengo <input class="blank n" data-s="kg" inputmode="decimal" placeholder="100" aria-label="Kilos"> kilos de
@@ -67,12 +74,11 @@ export default async function publish({ app, query, state }) {
               <button type="button" class="btn secondary sm" id="fill" style="margin-top:8px">Llenar con este mensaje</button>
             </details>
           </div>
-          <p class="tiny muted" style="margin:10px 0 0">Interpretación por reglas (no es IA). Siempre revisas antes de publicar.</p>
         </div>
 
         ${templates.length ? `<div><div class="small muted">Mis plantillas</div><div class="chips">${templates.map((t) => `<button type="button" class="chip" data-tpl="${t.id}">⭐ ${e(t.name)}</button>`).join('')}</div></div>` : ''}
 
-        <div class="card">
+        <div class="card" id="formCard">
           <div class="field"><label for="product">1. ¿Qué producto?</label>
             <div class="chips" id="quick">${QUICK.map((n) => `<button type="button" class="chip" data-p="${n}">${PRODUCTS.find((p) => p.name === n).icon} ${n}</button>`).join('')}</div>
             <input id="product" name="product" list="plist" value="${v('product')}" placeholder="Escribe o elige arriba" autocomplete="off">
@@ -94,15 +100,16 @@ export default async function publish({ app, query, state }) {
               <div class="err" data-for="rescue_price"></div>
             </div>
           </div>
-          <div class="field"><label for="hours">5. ¿Cuántas horas le quedan para venderse fresco?</label>
-            <div class="chips" id="hrs">${[6, 12, 24, 48, 72].map((h) => `<button type="button" class="chip" data-h="${h}">${h < 48 ? `${h} h` : `${h / 24} días`}</button>`).join('')}</div>
-            <div class="input-unit"><input id="hours" name="hours" inputmode="decimal" value="${v('hours')}" placeholder="24"><span>horas</span></div>
-            <div class="err" data-for="hours"></div>
-          </div>
           <div class="field"><label>¿Cómo está el producto?</label>
             <div class="stack" id="quality">${QUALITY.map((q) => `<label class="inline-check"><input type="radio" name="quality" value="${q.id}" ${initial.quality === q.id ? 'checked' : ''}><span>${e(q.label)}<br><span class="tiny muted">${e(q.hint)}</span></span></label>`).join('')}</div>
             <div class="notice danger small" style="margin-top:8px">Si está podrido, golpeado con daño o no apto para consumo, <strong>no se publica</strong> para venta como alimento.</div>
             <div class="err" data-for="quality"></div>
+          </div>
+          <div class="field"><label for="hours">5. ¿Cuántas horas le quedan para venderse fresco?</label>
+            <div class="shelf" id="shelfBox" aria-live="polite"></div>
+            <div class="chips" id="hrs">${[6, 12, 24, 48, 72].map((h) => `<button type="button" class="chip" data-h="${h}">${h < 48 ? `${h} h` : `${h / 24} días`}</button>`).join('')}</div>
+            <div class="input-unit"><input id="hours" name="hours" inputmode="decimal" value="${v('hours')}" placeholder="24"><span>horas</span></div>
+            <div class="err" data-for="hours"></div>
           </div>
           <div class="field"><label class="inline-check"><input type="checkbox" name="declaration" id="declaration"><span>Declaro que el producto es <strong>apto para consumo humano</strong> y que la información es verdadera.</span></label><div class="err" data-for="declaration"></div></div>
         </div>
@@ -113,6 +120,7 @@ export default async function publish({ app, query, state }) {
             <div class="field"><label for="min_kg">Compra mínima</label><div class="input-unit"><input id="min_kg" name="min_kg" inputmode="decimal" value="${v('min_kg')}" placeholder="1"><span>kg</span></div><div class="err" data-for="min_kg"></div></div>
             <div class="field"><label for="category">Categoría</label><select id="category" name="category">${CATEGORIES.map((c) => `<option value="${c.id}" ${initial.category === c.id ? 'selected' : ''}>${e(c.label)}</option>`).join('')}</select></div>
           </div>
+          <div class="field"><label for="municipality">Municipio de recolección</label><select id="municipality" name="municipality">${muniOptions(initial.municipality)}</select><div class="hint">Se usa para la distancia y el clima. En el tablero sólo se muestra el municipio.</div><div class="err" data-for="municipality"></div></div>
           <div class="field"><label class="inline-check"><input type="checkbox" name="allow_partial" ${initial.allow_partial !== false ? 'checked' : ''}><span>Acepto vender por partes (no sólo el lote completo)</span></label></div>
           <div class="field"><label for="pickup_point">Punto de recolección</label><input id="pickup_point" name="pickup_point" value="${v('pickup_point')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Sólo lo verá quien aparte.</div></div>
           <div class="field"><label for="pickup_window">Horario para recoger</label><input id="pickup_window" name="pickup_window" value="${v('pickup_window')}" placeholder="Ej. 7:00 a 13:00"></div>
@@ -120,7 +128,7 @@ export default async function publish({ app, query, state }) {
           <div class="field"><label for="notes">Comentarios</label><textarea id="notes" name="notes" maxlength="400" placeholder="Ej. Ideal para salsa o aguas frescas">${v('notes')}</textarea></div>
         </details>
 
-        <div class="sticky-cta"><button class="btn big" type="submit">🌱 Publicar ahora</button></div>
+        <div class="sticky-cta"><button class="btn big" type="submit">🌱 Revisar y publicar</button></div>
         <button type="button" class="btn ghost" id="saveTpl">⭐ Guardar como plantilla</button>
       </form>
       <aside class="aside stack"><div class="calc" id="calc"></div><div><div class="small muted" style="margin-bottom:6px">Así lo verán los compradores:</div><div id="preview"></div></div></aside>
@@ -146,6 +154,48 @@ export default async function publish({ app, query, state }) {
     if (p) f.category.value = p.category;
   };
 
+  // ---------- Vida útil estimada por clima ----------
+  async function loadClimate() {
+    const box = $('#shelfBox');
+    if (!box) return;
+    try {
+      forecast = await getForecast(f.municipality.value);
+    } catch {
+      forecast = forecast?.source === 'usuario' ? forecast : null;
+    }
+    renderShelf();
+  }
+  function renderShelf() {
+    const box = $('#shelfBox');
+    if (!box) return;
+    const d = get();
+    const muni = municipality(d.municipality);
+    if (!forecast) {
+      shelf = null;
+      box.innerHTML = `<div class="small"><strong>🌡️ Sin datos de clima</strong> <span class="muted">(sin conexión o servicio no disponible). ¿Cómo está el día en ${e(muni?.name || 'tu zona')}?</span></div>
+        <div class="chips">${MANUAL_CLIMATES.map((c) => `<button type="button" class="chip" data-clima="${c.temp}">${c.label}</button>`).join('')}</div>`;
+      return;
+    }
+    shelf = estimateShelfLife({ product: d.product, quality: d.quality, temps: forecast.temps, humidity: forecast.humidity });
+    const wx = forecast.source === 'open-meteo'
+      ? `Clima previsto en ${e(muni?.name)}: ${Math.round(Math.min(...forecast.temps.slice(0, 24)))}–${Math.round(Math.max(...forecast.temps.slice(0, 24)))} °C en las próximas 24 h`
+      : 'Clima indicado por ti';
+    if (!shelf) {
+      box.innerHTML = `<div class="small">🌡️ ${wx}. <span class="muted">Elige producto y estado para estimar su vida útil.</span></div>`;
+      return;
+    }
+    const declared = Number(String(d.hours).replace(',', '.'));
+    const warn = declared && declared > shelf.high ? `<div class="err" style="color:var(--terra-dark)">Declaraste ${declared} h, más de lo estimado para este clima. Tú decides, pero revisa que aguante.</div>` : '';
+    box.innerHTML = `
+      <div class="row between" style="gap:6px"><strong>🌡️ Vida útil estimada: ${shelf.hours >= 168 ? '7 días o más' : `~${shelf.hours} h`}</strong><span class="tiny muted">${shelf.hours >= 168 ? 'máximo publicable: 168 h' : `rango ${shelf.low}–${shelf.high} h`}</span></div>
+      <div class="small muted">${wx}; promedio ${shelf.temp_mean} °C${shelf.humidity != null ? `, humedad ${shelf.humidity}%` : ''}. ${e(CLASS_LABEL[shelf.cls])} · ${e(qualityLabel(d.quality))}.</div>
+      ${shelf.notes.map((n) => `<div class="tiny">• ${e(n)}</div>`).join('')}
+      ${warn}
+      <div class="row" style="margin-top:6px"><button type="button" class="btn sm secondary" data-useshelf>Usar ${shelf.hours} h</button>
+      <details class="tiny muted grow"><summary>¿Cómo se calcula?</summary>Estimación orientativa: perecibilidad del producto según su tasa de respiración (clasificación de Kader), ajuste por el estado que declaras y por la temperatura prevista (regla Q10: el deterioro se acelera con el calor). Las horas base por tipo de producto son un supuesto del prototipo por calibrar con productores. No certifica inocuidad. ${forecast.source === 'open-meteo' ? e(WEATHER_CREDIT) : ''}</details></div>`;
+  }
+
+  // ---------- Cálculo y vista previa ----------
   function update() {
     const d = get();
     if (!start && (d.product || d.kg)) start = Date.now();
@@ -165,10 +215,14 @@ export default async function publish({ app, query, state }) {
     const hours = Number(d.hours) || 24;
     $('#preview').innerHTML = lotCard({
       id: 0, product: d.product || 'Tu producto', photo, state: hours <= 6 ? 'por_vencer' : 'disponible', discount: ok ? discountPct(ref, res) : 0,
-      rescue_price_c: res, ref_price_c: ref, producer: { name: user.business_name || user.name }, municipality_name: '', quality: d.quality,
+      rescue_price_c: res, ref_price_c: ref, producer: { name: user.business_name || user.name }, municipality_name: municipality(d.municipality)?.name || '', quality: d.quality,
       producer_transport: d.producer_transport, available_g: g || 1, total_g: g || 1, expires_at: Date.now() + hours * 3600e3,
-    }, { owner: true }).replace('🏘️ </span>', '🏘️ Tu municipio</span>');
+    }, { owner: true });
     syncBlanks();
+    if (d.municipality !== climateMuni) {
+      climateMuni = d.municipality;
+      loadClimate(); // el clima depende del municipio de recolección
+    } else renderShelf();
   }
 
   // La frase para completar refleja el formulario (y viceversa) para que nunca se contradigan.
@@ -179,17 +233,67 @@ export default async function publish({ app, query, state }) {
     }
   }
 
+  /** Resumen usado por la confirmación del formulario y por el asistente de voz. */
+  function summaryHtml(d) {
+    const g = kgToGrams(d.kg || 0);
+    const ref = pesosToCents(d.ref_price || 0);
+    const res = pesosToCents(d.rescue_price || 0);
+    const t = orderTotals(g, ref, res);
+    const muni = municipality(d.municipality);
+    return `<dl class="kv small" style="margin:8px 0">
+      <dt>Producto</dt><dd>${e(d.product)}</dd>
+      <dt>Cantidad</dt><dd>${e(d.kg)} kg${d.min_kg ? ` · mínimo ${e(d.min_kg)} kg` : ''}</dd>
+      <dt>Precio</dt><dd>$${e(d.rescue_price)}/kg <s class="muted">$${e(d.ref_price)} habitual</s> · −${discountPct(ref, res)}%</dd>
+      <dt>Frescura</dt><dd>${e(d.hours)} h${shelf ? ` <span class="muted">(estimado por clima ~${shelf.hours} h)</span>` : ''}</dd>
+      <dt>Estado</dt><dd>${e(qualityLabel(d.quality) || 'Sin indicar')}</dd>
+      <dt>Zona</dt><dd>${e(muni?.name || '')}${d.producer_transport ? ' · puedes llevarlo' : ''}</dd>
+      <dt>Ingresos potenciales</dt><dd><strong>${mxn(t.rescueTotal)}</strong> <span class="muted">(valor habitual ${mxn(t.refTotal)}; ahorro para compradores ${mxn(t.savings)})</span></dd>
+    </dl>`;
+  }
+
+  async function doPublish() {
+    const body = { ...get(), photo, input_method: method, shelf: shelf ? { ...shelf, source: forecast?.source } : null };
+    const { lot } = await api('/api/lots', { method: 'POST', body });
+    localStorage.removeItem(DRAFT);
+    const secs = start ? Math.round((Date.now() - start) / 1000) : null;
+    assistant.destroy();
+    app.innerHTML = `<div class="wrap page" style="max-width:560px">
+      <div class="ticket"><div class="ticket-head"><h1>¡Publicado! 🌱</h1><p style="margin:0">${secs ? `Lo hiciste en ${secs} segundos. ` : ''}Ya aparece en el tablero con su temporizador.</p></div>
+      <div class="ticket-body stack">
+        ${lotCard(lot, { owner: true })}
+        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', shareText(lot))}">📤 Compartir en mis grupos de WhatsApp</a>
+        <div class="two"><a class="btn secondary" href="#/productor">Ir a mi panel</a><a class="btn ghost" href="#/publicar?nuevo=${Date.now()}">Publicar otro</a></div>
+      </div></div></div>`;
+    return lot;
+  }
+
+  // ---------- Asistente de voz ----------
+  const formApi = { get, set, update, autoCategory };
+  const assistant = mountAssistant({
+    form: formApi, user, summaryHtml, getShelf: () => shelf,
+    publish: () => { method = 'voz'; return doPublish(); },
+    showForm: () => $('#formCard').scrollIntoView({ behavior: 'smooth' }),
+  });
+  onLeave(() => assistant.destroy());
+  $('#openVA').addEventListener('click', () => assistant.open());
+
+  // ---------- Eventos del formulario ----------
   f.addEventListener('input', (ev) => {
     const blank = ev.target.dataset?.s;
-    if (blank) set(blank, ev.target.value);
+    if (blank) {
+      set(blank, ev.target.value);
+      method = 'frase';
+    }
     if (ev.target.name === 'product' || blank === 'product') autoCategory();
     update();
   });
   f.addEventListener('click', (ev) => {
-    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl]');
+    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl],button[data-clima],button[data-useshelf]');
     if (!b) return;
     if (b.dataset.p) (set('product', b.dataset.p), autoCategory());
     if (b.dataset.h) set('hours', b.dataset.h);
+    if ('useshelf' in b.dataset && shelf) set('hours', shelf.hours);
+    if (b.dataset.clima) forecast = manualForecast(Number(b.dataset.clima));
     if (b.dataset.d) {
       const ref = Number(String(f.ref_price.value).replace(',', '.'));
       if (!ref) return toast('Primero escribe tu precio de siempre', 'error');
@@ -203,73 +307,33 @@ export default async function publish({ app, query, state }) {
     update();
   });
 
+  const writeBox = $('#writeBox');
+  const toggle = $('#writeToggle');
+  toggle.addEventListener('click', () => {
+    writeBox.hidden = !writeBox.hidden;
+    toggle.setAttribute('aria-expanded', String(!writeBox.hidden));
+    toggle.textContent = writeBox.hidden ? '✍️ ¿Prefieres escribirlo aquí?' : 'Ocultar';
+    if (!writeBox.hidden) (syncBlanks(), $('[data-s="kg"]', writeBox).focus());
+  });
+
   $('#discard')?.addEventListener('click', () => {
     localStorage.removeItem(DRAFT);
     location.hash = '#/publicar?nuevo=' + Date.now();
   });
 
-  const writeBox = $('#writeBox');
-  const toggle = $('#writeToggle');
-  const openWrite = (open) => {
-    writeBox.hidden = !open;
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.textContent = open ? 'Ocultar' : '✍️ ¿Prefieres escribirlo?';
-    if (open) syncBlanks();
-  };
-  toggle.addEventListener('click', () => {
-    openWrite(writeBox.hidden);
-    if (!writeBox.hidden) $('[data-s="kg"]', writeBox).focus();
-  });
-
-  function applyText(text) {
-    if (!text) return toast('Escribe o dicta primero qué vendes', 'error');
+  $('#fill').addEventListener('click', () => {
+    const text = $('#speech').value.trim();
+    if (!text) return toast('Pega primero tu mensaje', 'error');
     const r = parseSpoken(text);
-    if (r.product) set('product', r.product), autoCategory();
-    if (r.kg) set('kg', r.kg);
-    if (r.refPrice) set('ref_price', r.refPrice);
-    if (r.rescuePrice) set('rescue_price', r.rescuePrice);
-    if (r.hours) set('hours', r.hours);
+    for (const k of ['product', 'kg', 'rescue_price', 'ref_price', 'hours', 'quality', 'min_kg', 'municipality']) if (r[k] != null) set(k, r[k]);
+    if (r.product) autoCategory();
+    if (r.producer_transport) set('producer_transport', true);
+    method = 'frase';
     update();
-    const names = { product: 'producto', kg: 'kilos', rescuePrice: 'precio de rescate', refPrice: 'precio de siempre', hours: 'horas' };
-    toast(r.missing.length ? `Revisa y completa: ${r.missing.map((m) => names[m]).join(', ')}` : 'Listo. Revisa los datos y publica.', r.missing.length ? '' : 'ok');
-  }
-  $('#fill').addEventListener('click', () => applyText($('#speech').value.trim()));
-
-  // Dictado por voz con Web Speech API (si el navegador lo soporta, p. ej. Chrome en Android).
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const mic = $('#mic');
-  if (!SR) {
-    // Sin dictado en este navegador: la escritura pasa a ser la vía directa.
-    $('#voiceBox').hidden = true;
-    toggle.hidden = true;
-    openWrite(true);
-  } else {
-    let rec;
-    mic.addEventListener('click', () => {
-      if (rec) return rec.stop();
-      rec = new SR();
-      rec.lang = 'es-MX';
-      rec.interimResults = true;
-      mic.classList.add('rec');
-      $('#micLabel').textContent = 'Te escucho… toca otra vez para terminar';
-      let said = '';
-      const heard = $('#heard');
-      rec.onresult = (ev) => {
-        said = [...ev.results].map((r) => r[0].transcript).join(' ');
-        heard.hidden = false;
-        heard.textContent = `Escuché: “${said}”`;
-      };
-      rec.onerror = () => toast('No se pudo usar el micrófono. Puedes escribirlo.', 'error');
-      rec.onend = () => {
-        mic.classList.remove('rec');
-        $('#micLabel').textContent = 'Toca y dime qué vendes';
-        rec = null;
-        if (said) applyText(said);
-      };
-      rec.start();
-    });
-    onLeave(() => rec?.stop());
-  }
+    const names = { product: 'producto', kg: 'kilos', rescue_price: 'precio de rescate', ref_price: 'precio de siempre', hours: 'horas', quality: 'estado del producto', pack_kg: 'kilos por caja' };
+    if (r.unsafe) toast('Un producto podrido o no apto no se puede publicar como alimento', 'error');
+    else toast(r.missing.length ? `Completa: ${r.missing.map((m) => names[m]).join(', ')}` : 'Listo. Revisa los datos y publica.', r.missing.length ? '' : 'ok');
+  });
 
   $('#photo').addEventListener('change', async (ev) => {
     const file = ev.target.files[0];
@@ -287,7 +351,7 @@ export default async function publish({ app, query, state }) {
   $('#saveTpl').addEventListener('click', async () => {
     const name = prompt('Nombre de la plantilla (ej. “Jitomate de los martes”)', f.product.value);
     if (!name) return;
-    const { declaration, ...payload } = get();
+    const { declaration, municipality: _m, ...payload } = get();
     try {
       await api('/api/templates', { method: 'POST', body: { name, payload } });
       toast('Plantilla guardada ⭐', 'ok');
@@ -296,29 +360,32 @@ export default async function publish({ app, query, state }) {
     }
   });
 
-  f.addEventListener('submit', async (ev) => {
+  // Confirmación obligatoria antes de publicar (también desde el formulario).
+  f.addEventListener('submit', (ev) => {
     ev.preventDefault();
-    const btn = f.querySelector('[type=submit]');
-    btn.disabled = true;
-    btn.textContent = 'Publicando…';
-    try {
-      const body = { ...get(), photo };
-      const { lot } = await api('/api/lots', { method: 'POST', body });
-      localStorage.removeItem(DRAFT);
-      const secs = start ? Math.round((Date.now() - start) / 1000) : null;
-      app.innerHTML = `<div class="wrap page" style="max-width:560px">
-        <div class="ticket"><div class="ticket-head"><h1>¡Publicado! 🌱</h1><p style="margin:0">${secs ? `Lo hiciste en ${secs} segundos. ` : ''}Ya aparece en el tablero con su temporizador.</p></div>
-        <div class="ticket-body stack">
-          ${lotCard(lot, { owner: true })}
-          <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', shareText(lot))}">📤 Compartir en mis grupos de WhatsApp</a>
-          <div class="two"><a class="btn secondary" href="#/productor">Ir a mi panel</a><a class="btn ghost" href="#/publicar?nuevo=${Date.now()}">Publicar otro</a></div>
-        </div></div></div>`;
-    } catch (err) {
-      fieldErrors(f, err.fields);
-      toast(err.status === 0 ? 'Sin conexión. Tu borrador está guardado; publícalo cuando tengas señal.' : err.message, 'error');
-      btn.disabled = false;
-      btn.textContent = '🌱 Publicar ahora';
-    }
+    const d = get();
+    fieldErrors(f, {});
+    const dlg = document.createElement('dialog');
+    dlg.className = 'card confirm-dlg';
+    dlg.innerHTML = `<h2 style="margin:0">¿Publicamos así?</h2>${summaryHtml(d)}
+      ${d.declaration ? '' : '<div class="notice danger small">Falta marcar la declaración de que el producto es apto para consumo.</div>'}
+      <div class="two" style="margin-top:10px"><button type="button" class="btn" data-go>✅ Sí, publicar</button><button type="button" class="btn secondary" data-back>✏️ Corregir</button></div>`;
+    document.body.append(dlg);
+    dlg.showModal();
+    const closeDlg = () => (dlg.close(), dlg.remove());
+    dlg.querySelector('[data-back]').addEventListener('click', closeDlg);
+    dlg.querySelector('[data-go]').addEventListener('click', async (e2) => {
+      e2.target.disabled = true;
+      e2.target.textContent = 'Publicando…';
+      try {
+        await doPublish();
+        closeDlg();
+      } catch (err) {
+        closeDlg();
+        fieldErrors(f, err.fields);
+        toast(err.status === 0 ? 'Sin conexión. Tu borrador está guardado; publícalo cuando tengas señal.' : err.message, 'error');
+      }
+    });
   });
 
   update();

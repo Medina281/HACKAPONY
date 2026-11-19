@@ -73,7 +73,7 @@ describe('3. Cálculos', () => {
 
   test('3b. interpreta la frase dictada del reto', () => {
     const r = parseSpoken('Tengo 100 kilos de jitomate a 12 pesos el kilo, normalmente a 25, y me quedan aproximadamente 24 horas para venderlos');
-    assert.deepEqual([r.product, r.kg, r.rescuePrice, r.refPrice, r.hours], ['Jitomate', 100, 12, 25, 24]);
+    assert.deepEqual([r.product, r.kg, r.rescue_price, r.ref_price, r.hours], ['Jitomate', 100, 12, 25, 24]);
   });
 });
 

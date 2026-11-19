@@ -67,6 +67,8 @@ export function serializeLot(l, now, { viewer, from } = {}) {
     photo: l.photo,
     producer: { id: l.producer_id, name: l.producer_business || l.producer_name },
     is_demo: !!l.is_demo,
+    input_method: l.input_method,
+    shelf: l.shelf_json ? JSON.parse(l.shelf_json) : null,
   };
   if (from && muni) out.distance_km = haversineKm(from, muni);
   // Mecanismo de contacto autorizado: sólo comercios registrados ven el WhatsApp del productor.
@@ -144,14 +146,14 @@ export function createLot(db, now, producer, body, { uploadsDir, isDemo = 0 } = 
       .prepare(
         `INSERT INTO lots (producer_id, product, category, quality, total_g, available_g, min_g, allow_partial,
           ref_price_c, rescue_price_c, original_rescue_price_c, fresh_hours, expires_at, municipality, pickup_point,
-          pickup_window, producer_transport, notes, photo, status, declaration_ok, is_demo, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activo',1,?,?)`,
+          pickup_window, producer_transport, notes, photo, status, declaration_ok, is_demo, created_at, input_method, shelf_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activo',1,?,?,?,?)`,
       )
       .run(
         producer.id, v.product, v.category, v.quality, v.total_g, v.total_g, v.min_g, v.allow_partial,
         v.ref_price_c, v.rescue_price_c, v.rescue_price_c, v.fresh_hours, now + v.fresh_hours * 3600e3,
         v.municipality, v.pickup_point || producer.pickup_point, v.pickup_window, v.producer_transport, v.notes,
-        photo, isDemo, now,
+        photo, isDemo, now, v.input_method, v.shelf_json,
       );
     const id = Number(r.lastInsertRowid);
     db.prepare('INSERT INTO inventory_movements (lot_id, delta_g, reason, created_at) VALUES (?,?,?,?)').run(

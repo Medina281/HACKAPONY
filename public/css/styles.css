@@ -265,3 +265,53 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color:
 .blank::placeholder { color: #b3ab97; font-weight: 500; }
 .paste { margin-top: 10px; }
 .paste summary { cursor: pointer; font-size: .88rem; color: var(--ink-2); min-height: 32px; }
+
+/* ---- Lanzador del asistente ---- */
+.voice-launch { width: 100%; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.voice-launch .mic-big { display: grid; place-items: center; }
+.voice-text { display: flex; flex-direction: column; gap: 2px; }
+.voice-text strong { font-size: 1.15rem; color: var(--green); }
+.shelf { background: var(--green-soft); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.shelf:empty { display: none; }
+.shelf summary { cursor: pointer; }
+.confirm-dlg { max-width: 460px; width: 94vw; border: 1px solid var(--line); }
+.confirm-dlg::backdrop, .va::backdrop { background: rgba(32, 40, 32, .45); }
+
+/* ---- Asistente de voz (estilo chat de WhatsApp) ---- */
+body.va-open { overflow: hidden; }
+.va { position: fixed; inset: 0; z-index: 60; background: rgba(32, 40, 32, .45); display: flex; align-items: stretch; justify-content: center; }
+.va[hidden] { display: none; }
+.va-panel { background: #ece5d8; width: 100%; max-width: 520px; display: flex; flex-direction: column; height: 100%; }
+@media (min-width: 860px) { .va { align-items: center; } .va-panel { height: 86vh; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); } }
+.va-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--green); color: #fff; padding-top: max(10px, env(safe-area-inset-top)); }
+.va-head .tiny { opacity: .8; }
+.va-icon { background: none; border: 0; color: inherit; font-size: 1.3rem; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: 50%; }
+.va-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--green-2); display: grid; place-items: center; font-size: 1.2rem; }
+.va-msgs { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px;
+  background-image: radial-gradient(rgba(36,74,54,.05) 1px, transparent 1px); background-size: 18px 18px; }
+.va-msg { max-width: 86%; padding: 8px 12px; border-radius: 12px; font-size: .98rem; line-height: 1.4; box-shadow: 0 1px 1px rgba(0,0,0,.08); position: relative; }
+.va-msg.bot { align-self: flex-start; background: var(--white); border-top-left-radius: 4px; }
+.va-msg.me { align-self: flex-end; background: #d9ecc8; border-top-right-radius: 4px; }
+.va-msg.me.live { opacity: .75; font-style: italic; }
+.va-msg .va-check { font-size: .7rem; color: #4f8bc9; margin-left: 6px; }
+.va-msg.live .va-check { display: none; }
+.va-note { font-size: .74rem; color: var(--ink-2); margin-bottom: 2px; }
+.va-msg .kv { grid-template-columns: auto 1fr; }
+.va-decl { margin-top: 8px; font-size: .9rem; }
+.va-chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 10px; background: #ece5d8; }
+.va-chips:empty { display: none; }
+.va-chips .chip { background: var(--white); }
+.va-composer, .va-recbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #ece5d8; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.va-composer[hidden], .va-recbar[hidden] { display: none; }
+.va-composer input { flex: 1; border-radius: 999px; border: 0; min-height: 48px; padding: 0 18px; }
+.va-round { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--green); color: #fff; font-size: 1.35rem; flex: none; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.va-recbar { background: var(--white); }
+.va-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--red); animation: pulse 1s infinite; }
+#vaTime { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 40px; }
+.va-wave { display: flex; gap: 3px; align-items: center; height: 28px; flex: 1; }
+.va-wave i { width: 3px; background: var(--green-2); border-radius: 2px; height: 30%; animation: wave 1s ease-in-out infinite; }
+.va-wave i:nth-child(3n) { animation-delay: .15s; } .va-wave i:nth-child(3n+1) { animation-delay: .3s; } .va-wave i:nth-child(4n) { animation-delay: .45s; }
+@keyframes wave { 50% { height: 100%; } }
+.va-slide { display: none; }
+@media (min-width: 400px) { .va-slide { display: inline; } }
+@media (prefers-reduced-motion: reduce) { .va-wave i, .va-dot { animation: none; } }

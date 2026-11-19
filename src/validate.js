@@ -30,8 +30,9 @@ export function validateLot(b) {
   if (minKg != null && (!Number.isFinite(minKg) || minKg <= 0)) e.min_kg = 'La compra mínima debe ser mayor a 0';
   else if (minKg != null && Number.isFinite(kg) && minKg > kg) e.min_kg = 'La compra mínima no puede ser mayor que el lote';
 
-  const quality = b.quality || 'excedente';
-  if (quality === 'no_apto') e.quality = 'Los productos no aptos para consumo no se pueden publicar';
+  const quality = b.quality;
+  if (!quality) e.quality = 'Indica cómo está el producto';
+  else if (quality === 'no_apto') e.quality = 'Los productos no aptos para consumo no se pueden publicar';
   else if (!QUALITY.some((q) => q.id === quality)) e.quality = 'Estado no válido';
 
   const category = b.category || 'otro';
@@ -61,7 +62,23 @@ export function validateLot(b) {
     pickup_window: str(b.pickup_window, 80) || null,
     producer_transport: b.producer_transport ? 1 : 0,
     notes: str(b.notes, 400) || null,
+    input_method: ['voz', 'frase'].includes(b.input_method) ? b.input_method : 'formulario',
+    shelf_json: sanitizeShelf(b.shelf),
   };
+}
+
+/** Guarda sólo números en rango y textos conocidos de la estimación de vida útil (dato informativo). */
+function sanitizeShelf(s) {
+  if (!s || typeof s !== 'object') return null;
+  const n = (v, lo, hi) => (Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi ? Math.round(Number(v) * 10) / 10 : null);
+  const out = {
+    hours: n(s.hours, 1, 168), low: n(s.low, 1, 168), high: n(s.high, 1, 168),
+    temp_mean: n(s.temp_mean, -15, 50), temp_max: n(s.temp_max, -15, 55), humidity: n(s.humidity, 0, 100),
+    cls: ['baja', 'moderada', 'alta', 'muy_alta', 'extrema'].includes(s.cls) ? s.cls : null,
+    source: ['open-meteo', 'usuario'].includes(s.source) ? s.source : null,
+    method: s.method === 'q10-v1' ? s.method : null,
+  };
+  return out.hours && out.source && out.method ? JSON.stringify(out) : null;
 }
 
 export function validatePhone(p) {

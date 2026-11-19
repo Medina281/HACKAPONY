@@ -12,7 +12,7 @@ npm run demo     # crea la base de demostración y levanta el servidor
 # o por separado:
 npm run seed     # (re)crea data/raiz.db con datos ficticios de Michoacán
 npm start        # http://localhost:3000  (PORT=xxxx para otro puerto)
-npm test         # 12 pruebas automatizadas
+npm test         # 25 pruebas automatizadas
 ```
 
 Desde un celular en la misma red Wi-Fi: usa la dirección que imprime la consola (`http://192.168.x.x:3000`).
@@ -38,6 +38,30 @@ En la pantalla “Entrar” hay botones de un toque para cada cuenta. Para proba
 
 Además: reservas parciales con transacciones (sin sobreventa), ciclo de pedido controlado en servidor (apartado → confirmado → listo → recolectado / cancelado / vencido), liberación automática de apartados no recogidos (3 h de tolerancia), entrega confirmada sólo con el código del comprador, panel del productor (3 acciones grandes), panel del comprador, dashboard de impacto en vivo (con interruptor “sólo datos reales”), mapa Leaflet/OSM con respaldo en lista, panel de administración (reportes, moderación, suspensión), reportes de irregularidades, sugerencia de rebaja por reglas (el productor la autoriza), PWA instalable con consulta sin conexión marcada como desactualizada.
 
+## Asistente de Publicación por Voz
+
+Botón **“Publicar hablando”** en `#/publicar`. Abre una conversación estilo WhatsApp:
+
+- **Grabación como nota de voz:** mantener presionado 🎤 y soltar para enviar; deslizar a la izquierda para cancelar; o tocar una vez y luego ➤. Temporizador, onda animada y transcripción en vivo (Web Speech API, `es-MX`). Límite de 60 s por nota.
+- **Extracción:** producto, cantidad y unidad (kilos, toneladas, “media tonelada”, cajas/rejas/costales con su peso), precio de rescate, precio habitual, tiempo (horas, días, semanas), estado, municipio, compra mínima y si el productor lo lleva. Entiende números con palabras (“ciento veinticinco”, “treinta y cinco”) y expresiones como “varos”, “ya mero se pasa”, “me sobraron”.
+- **Conversión de unidades** sólo con datos suficientes: “10 cajas de 20 kilos a 300 la caja” → 200 kg a $15/kg. Si no dijo cuánto pesa la caja, lo **pregunta**.
+- **Preguntas complementarias** para lo que falte, con respuestas rápidas (chips). Expresiones vagas (“hasta mañana”) no se convierten en horas por adivinanza: se preguntan.
+- **Voz del asistente** (speechSynthesis) para preguntas y confirmación, con botón para silenciar.
+- **Llena el formulario existente** (editable) y usa las mismas validaciones del servidor.
+- **Confirmación obligatoria:** resumen con cálculo de descuento e ingresos potenciales + declaración de apto para consumo. Nada se publica sin “✅ Publicar”. El formulario manual también pasa por confirmación.
+- **Alternativas manuales:** escribir en el mismo chat, frase para completar, pegar un mensaje de WhatsApp o el formulario. Sin soporte de dictado, el asistente funciona por texto; sin internet se avisa que el dictado no está disponible.
+- **Privacidad:** aviso antes del primer uso del micrófono. El dictado lo hace el navegador (en Chrome se procesa en servidores de Google). Raíz Directa no graba ni guarda audio ni transcripciones; sólo guarda los datos confirmados y el método de captura (`voz`, `frase` o `formulario`).
+
+## Vida útil estimada por clima
+
+Al publicar, se consulta el pronóstico horario de **Open-Meteo** (gratuito para uso no comercial, sin llave, datos CC BY 4.0) para la **cabecera municipal** de recolección (no la ubicación exacta), con caché de 1 h. Con el producto y su estado se calcula una vida útil orientativa:
+
+1. Perecibilidad por tasa de respiración (clasificación de Kader; guayaba no aparece en la fuente → supuesto “moderada”).
+2. Horas base a 20 °C por clase y factor por estado declarado — **supuestos del prototipo**, por calibrar con productores e INIFAP.
+3. Ajuste por la temperatura promedio prevista con la tabla típica Q10 de vida útil relativa.
+
+El agricultor ve la estimación, el rango y avisos (horas ≥ 30 °C, aire seco) y decide si la usa. La estimación y el clima se guardan con la oferta; en el detalle y en el panel se muestra en vivo el tiempo transcurrido, el % de vida útil usada y la fase (Fresco → Usar pronto → Último momento). Sin internet, el agricultor elige “Fresco / Templado / Caluroso”. No certifica inocuidad.
+
 ## Arquitectura
 
 Monolito modular, cero dependencias externas:
@@ -51,7 +75,9 @@ src/validate.js           validación del lado del servidor
 src/services/lots.js      ofertas, estados, sugerencia de precio, privacidad de ubicación
 src/services/orders.js    reservas atómicas, máquina de estados, vencimientos
 src/services/stats.js     indicadores de impacto
-public/js/shared/         cálculos, catálogo e intérprete de voz compartidos cliente/servidor
+public/js/shared/         cálculos, catálogo, intérprete de voz y vida útil (compartidos cliente/servidor)
+public/js/voice/          asistente de voz (reconocimiento, síntesis, conversación)
+public/js/weather.js      pronóstico Open-Meteo con caché
 public/js/views/          vistas (SPA ligera sin framework)
 public/sw.js              service worker (PWA)
 scripts/seed.js           datos de demostración (marcados is_demo = 1)
@@ -74,5 +100,8 @@ test/                     pruebas con node:test sobre servidor y base reales
 - Distancias en línea recta entre cabeceras municipales (coordenadas aproximadas); el “por carretera” usa un factor de 1.3 estimado.
 - El temporizador es una estimación comercial y no certifica inocuidad.
 - El mapa requiere internet (Leaflet/OSM); sin red se muestra la lista por municipio.
+- El dictado depende del navegador: funciona en Chrome/Edge (Android y escritorio); Safari en iPhone tiene soporte limitado; Firefox no lo trae. En esos casos el asistente funciona por texto.
+- Las pruebas del asistente usan un reconocedor simulado: falta probarlo con micrófono real en un teléfono antes del evento.
+- La vida útil por clima es una estimación orientativa con supuestos declarados; Open-Meteo gratuito es sólo para uso no comercial (para operar comercialmente hay que contratar su plan o cambiar de proveedor).
 - Falta aviso de privacidad formal (LFPDPPP) y revisión legal antes de operar con usuarios reales.
 - Los datos de demostración (personas, negocios, teléfonos, precios) son ficticios.
