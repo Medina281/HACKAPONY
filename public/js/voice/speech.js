@@ -4,8 +4,8 @@
 
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const UA = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-// Navegadores que exponen la API pero no transcriben (Opera/Opera GX, Brave, Firefox, app de escritorio Electron).
-export const brokenRecognizer = /\bOPR\/|OPRGX|Electron\/|Firefox\//.test(UA) || (typeof navigator !== 'undefined' && !!navigator.brave);
+// Navegadores que exponen la API pero no transcriben (Opera/Opera GX, Brave, Firefox, apps de escritorio como la de Claude).
+export const brokenRecognizer = /\bOPR\/|OPRGX|Electron\/|Firefox\/|\bClaude\//.test(UA) || (typeof navigator !== 'undefined' && !!navigator.brave);
 export const canRecognize = !!SR && !brokenRecognizer;
 export const isAndroid = /Android/i.test(UA);
 export const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -28,19 +28,22 @@ export function createRecognizer({ onText, onEnd, onError }) {
   rec.interimResults = true;
   // En Android el modo continuo duplica el texto: ahí se dicta una frase y se envía sola al terminar de hablar.
   rec.continuous = !isAndroid;
-  rec.maxAlternatives = 1;
+  rec.maxAlternatives = 3; // varias lecturas posibles: el asistente se queda con la que más datos entiende
   let finalText = '';
+  let alts = [];
   let cancelled = false;
   rec.onresult = (ev) => {
     let interim = '';
     finalText = '';
+    const finals = [...ev.results].filter((r) => r.isFinal);
     for (const r of ev.results) (r.isFinal ? (finalText += r[0].transcript + ' ') : (interim += r[0].transcript));
+    alts = [0, 1, 2].map((i) => finals.map((r) => (r[i] || r[0]).transcript).join(' ').trim()).filter(Boolean);
     onText((finalText + interim).trim(), !interim);
   };
   rec.onerror = (ev) => onError?.(ev.error);
-  rec.onend = () => onEnd?.(cancelled ? '' : finalText.trim());
+  rec.onend = () => onEnd?.(cancelled ? '' : finalText.trim(), cancelled ? [] : [...new Set(alts)]);
   return {
-    start: () => { cancelled = false; finalText = ''; rec.start(); },
+    start: () => { cancelled = false; finalText = ''; alts = []; rec.start(); },
     stop: () => { try { rec.stop(); } catch { /* ya terminó */ } },
     cancel: () => { cancelled = true; try { rec.abort(); } catch { /* ya terminó */ } },
   };

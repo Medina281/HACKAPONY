@@ -682,3 +682,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 .va-live { background: #fff; border-top: 1px solid var(--line); padding: 10px 14px; font-size: 15px; line-height: 1.35; min-height: 44px; max-height: 30vh; overflow-y: auto; color: var(--ink, #1d2a22); }
 .va-live[hidden] { display: none; }
 .va-recbar .va-round, .va-recbar .va-icon { min-width: 52px; min-height: 52px; }
+
+/* Lo oculto siempre se oculta (algunas reglas de display lo anulaban) */
+[hidden] { display: none !important; }

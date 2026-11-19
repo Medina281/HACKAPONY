@@ -331,6 +331,15 @@ export function mountAssistant(ctx) {
       ? 'Tu navegador no está convirtiendo la voz en texto. Abre la página en <strong>Chrome</strong> (Android) o <strong>Safari</strong> (iPhone), o toca la caja de texto y usa el <strong>micrófono de tu teclado</strong>.'
       : 'Este navegador no está convirtiendo la voz en texto (pasa en Opera, Brave y Firefox). Abre la página en <strong>Chrome</strong> o <strong>Edge</strong>, o escríbeme.';
   }
+  // De las lecturas que propone el navegador, se usa la que más datos permite entender.
+  function bestReading(first, alts) {
+    const score = (t) => parseMulti(t).reduce((n, r) => n + ['product', 'kg', 'rescue_price', 'ref_price', 'quality', 'hours'].filter((k) => r[k] != null).length, 0)
+      + (st.lastAsk ? Object.values(parseSpoken(t, { context: st.lastAsk })).filter((v) => v != null && v !== false && !Array.isArray(v)).length * 0.1 : 0);
+    let best = first;
+    let top = first ? score(first) : -1;
+    for (const a of alts) { const sc = score(a); if (sc > top) { top = sc; best = a; } }
+    return best;
+  }
   function finish(send) {
     if (!st.recording) return;
     clearTimeout(watchdog);
@@ -362,8 +371,8 @@ export function mountAssistant(ctx) {
         if (code === 'network' || code === 'service-not-allowed') { st.errorShown = true; bot(noVoiceHelp()); }
         if (code !== 'no-speech' && code !== 'aborted') finish(false);
       },
-      onEnd: (finalText) => {
-        st.finalText = finalText;
+      onEnd: (finalText, alts = []) => {
+        st.finalText = bestReading(finalText, alts);
         finish(true);
       },
     });

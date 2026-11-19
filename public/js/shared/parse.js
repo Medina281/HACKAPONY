@@ -226,15 +226,23 @@ function applyContext(r, t, field) {
     if (words.length >= 3 && words.length <= 40) r.product = words[0].toUpperCase() + words.slice(1);
   }
   if (first == null) return;
-  if (field === 'kg' && r.kg == null && !r.packs) r.kg = first;
-  if (field === 'pack_kg' && r.pack_kg == null) r.pack_kg = first;
-  if (field === 'rescue_price' && r.rescue_price == null && !r.pending_prices.length) r.rescue_price = first;
-  if (field === 'ref_price') {
-    // Al preguntar por el precio de siempre, el número dicho ES el de siempre.
-    if (r.ref_price == null) r.ref_price = first;
-    if (nums.length === 1 && r.rescue_price === first) r.rescue_price = null;
+  // Sólo se usa para el dato preguntado un número que NO se haya entendido ya como otra cosa
+  // ("aguanta un día" son horas, no el precio; "100 kilos" son kilos).
+  const used = [r.kg, r.rescue_price, r.ref_price, r.hours, r.hours != null ? r.hours / 24 : null, r.pack_kg, r.packs, r.min_kg].filter((x) => x != null);
+  const free = nums.filter((n) => !used.includes(n));
+  const pick = free[0];
+  if (field === 'ref_price' && r.ref_price == null && nums.length === 1 && r.rescue_price === first && r.kg == null) {
+    // Al preguntar por el precio de siempre, "a 25" es el de siempre, no el de rescate.
+    r.ref_price = first;
+    r.rescue_price = null;
+    return;
   }
-  if (field === 'hours' && r.hours == null) r.hours = /dia/.test(t) ? first * 24 : first;
+  if (pick == null) return;
+  if (field === 'kg' && r.kg == null && !r.packs) r.kg = pick;
+  if (field === 'pack_kg' && r.pack_kg == null) r.pack_kg = pick;
+  if (field === 'rescue_price' && r.rescue_price == null && !r.pending_prices.length) r.rescue_price = pick;
+  if (field === 'ref_price' && r.ref_price == null) r.ref_price = pick;
+  if (field === 'hours' && r.hours == null) r.hours = /dia/.test(t) ? pick * 24 : pick;
 }
 
 /** Convierte lo que el agricultor dijo de empaques cuando ya se sabe cuánto pesa cada uno. */

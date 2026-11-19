@@ -23,7 +23,7 @@ const WANT = {
   mango: { files: ['Mangos - single and halved.jpg'], search: 'mango fruit ripe' },
   calabacita: { files: ['Zucchini in basket 2021 G1.jpg'], search: 'zucchini vegetable' },
   cebolla: { files: ['YellowOnions.jpg', 'Onion on White.JPG'], search: 'white onions' },
-  papa: { files: ['Potato tubers.jpg', 'Potato tubers in pail.jpg'], search: 'potatoes tubers' },
+  papa: { files: ['Potato for sale in Nigeria.jpg', 'Potato tubers in pail.jpg'], search: 'potatoes tubers' },
   platano: { files: ['Bunch of bananas on sale.jpg'], search: 'bananas bunch fruit' },
   chile: { files: ['Serrano peppers at county fair.jpg'], search: 'serrano peppers' },
   zanahoria: { files: ['Carrots of many colors.jpg'], search: 'carrots vegetable' },
