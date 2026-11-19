@@ -6,7 +6,7 @@ import { $, e, toast, mxn, stripIcons } from '../ui.js';
 import { parseMulti, parseSpoken, resolvePacks, VAGUE_LABEL } from '../shared/parse.js';
 import { QUALITY, PRODUCTS, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, kgToGrams, pesosToCents, discountPct } from '../shared/calc.js';
-import { createRecognizer, canRecognize, canSpeak, speak, stopSpeaking, ERROR_TEXT } from './speech.js';
+import { createRecognizer, canRecognize, brokenRecognizer, isAndroid, canSpeak, speak, stopSpeaking, ERROR_TEXT } from './speech.js';
 
 const QUICK = ['Jitomate', 'Aguacate', 'Fresa', 'Guayaba', 'Limón', 'Mango', 'Cebolla', 'Papa'];
 const MIC_OK = 'rd_mic_ok';
@@ -33,24 +33,24 @@ export function mountAssistant(ctx) {
   root.innerHTML = `
     <div class="va-panel">
       <header class="va-head">
-        <button class="va-icon" data-x aria-label="Cerrar asistente">←</button>
+        <button type="button" class="va-icon" data-x aria-label="Cerrar asistente">←</button>
         <div class="va-avatar" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></div>
         <div class="grow"><strong>Asistente Raíz Directa</strong><div class="tiny" id="vaStatus">te ayudo a publicar</div></div>
-        <button class="va-icon" id="vaMute" aria-label="Activar o silenciar la voz del asistente" ${canSpeak ? '' : 'hidden'}>${st.mute ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#mute"/></svg>' : '<svg class="i" aria-hidden="true"><use href="/icons.svg#volume"/></svg>'}</button>
+        <button type="button" class="va-icon" id="vaMute" aria-label="Activar o silenciar la voz del asistente" ${canSpeak ? '' : 'hidden'}>${st.mute ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#mute"/></svg>' : '<svg class="i" aria-hidden="true"><use href="/icons.svg#volume"/></svg>'}</button>
       </header>
       <div class="va-msgs" id="vaMsgs" aria-live="polite"></div>
       <div class="va-chips" id="vaChips"></div>
       <div class="va-composer" id="vaComposer">
         <input id="vaText" placeholder="Escribe un mensaje" autocomplete="off" aria-label="Escribe tu respuesta">
-        <button class="va-round" id="vaSend" aria-label="Enviar" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
-        <button class="va-round" id="vaMic" aria-label="Mantén presionado para hablar; toca para grabar sin sostener" ${canRecognize ? '' : 'hidden'}><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></button>
+        <button type="button" class="va-round" id="vaSend" aria-label="Enviar" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
+        <button type="button" class="va-round" id="vaMic" aria-label="Tocar para hablar" ${canRecognize ? '' : 'hidden'}><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></button>
       </div>
+      <div class="va-live" id="vaLive" hidden>Habla ahora…</div>
       <div class="va-recbar" id="vaRec" hidden>
-        <button class="va-icon" id="vaCancel" aria-label="Cancelar grabación"><svg class="i" aria-hidden="true"><use href="/icons.svg#trash"/></svg></button>
+        <button type="button" class="va-icon" id="vaCancel" aria-label="Cancelar grabación"><svg class="i" aria-hidden="true"><use href="/icons.svg#trash"/></svg></button>
         <span class="va-dot" aria-hidden="true"></span><span id="vaTime">0:00</span>
         <span class="va-wave" aria-hidden="true">${'<i></i>'.repeat(14)}</span>
-        <span class="tiny muted va-slide">◀ desliza para cancelar</span>
-        <button class="va-round" id="vaStop" aria-label="Terminar y enviar"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
+        <button type="button" class="va-round" id="vaStop" aria-label="Terminar y enviar"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
       </div>
     </div>`;
   document.body.append(root);
@@ -319,53 +319,84 @@ export function mountAssistant(ctx) {
     setChips(opts);
   }
 
-  // ---------- Grabación estilo nota de voz ----------
-  let live = null;
+  // ---------- Grabación: tocar para hablar, tocar para enviar ----------
+  // Todo tiene salida: el botón Enviar y el de Cancelar siempre regresan la pantalla a la normalidad,
+  // aunque el navegador nunca avise que terminó (pasa en algunos teléfonos y navegadores).
+  const live = $('#vaLive', root);
   let tick = null;
+  let watchdog = null;
+  let forceEnd = null;
+  function noVoiceHelp() {
+    return isAndroid || /iPhone|iPad/i.test(navigator.userAgent)
+      ? 'Tu navegador no está convirtiendo la voz en texto. Abre la página en <strong>Chrome</strong> (Android) o <strong>Safari</strong> (iPhone), o toca la caja de texto y usa el <strong>micrófono de tu teclado</strong>.'
+      : 'Este navegador no está convirtiendo la voz en texto (pasa en Opera, Brave y Firefox). Abre la página en <strong>Chrome</strong> o <strong>Edge</strong>, o escríbeme.';
+  }
+  function finish(send) {
+    if (!st.recording) return;
+    clearTimeout(watchdog);
+    clearTimeout(forceEnd);
+    const secs = Math.max(1, Math.round((Date.now() - st.startedAt) / 1000));
+    const t = (st.finalText || st.liveText || '').trim();
+    recUI(false);
+    if (!send) return;
+    if (t) answer(t, { voice: true, secs });
+    else if (!st.errorShown) bot('No alcancé a escuchar nada. Toca el micrófono y habla cerca del teléfono, o escríbeme.', 'No alcancé a escucharte.');
+  }
   function startRec() {
     if (st.recording) return;
-    if (!navigator.onLine) return bot(e('Sin internet el dictado no funciona en la mayoría de los teléfonos. Escríbeme; yo lleno los datos.'));
+    if (!navigator.onLine) return bot('Sin internet el dictado no funciona. Escríbeme; yo lleno los datos.');
     stopSpeaking();
+    st.finalText = '';
+    st.liveText = '';
+    st.errorShown = false;
+    st.heard = false;
     st.rec = createRecognizer({
       onText: (t) => {
-        live ||= me('…');
-        live.classList.add('live');
-        live.querySelector('.va-t').textContent = t || '…';
-        msgs.scrollTop = msgs.scrollHeight;
+        st.heard = true;
+        st.liveText = t;
+        live.textContent = t || 'Habla ahora…';
       },
       onError: (code) => {
-        const m = ERROR_TEXT[code];
-        if (m) bot(e(m), m);
-        if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(code)) text.focus();
+        const m = code === 'network' || code === 'service-not-allowed' ? null : ERROR_TEXT[code];
+        if (m) { st.errorShown = true; bot(e(m), m); }
+        if (code === 'network' || code === 'service-not-allowed') { st.errorShown = true; bot(noVoiceHelp()); }
+        if (code !== 'no-speech' && code !== 'aborted') finish(false);
       },
       onEnd: (finalText) => {
-        const secs = Math.max(1, Math.round((Date.now() - st.startedAt) / 1000));
-        recUI(false);
-        const t = finalText || (live && st.sendOnEnd ? live.querySelector('.va-t').textContent.replace('…', '') : '');
-        live?.remove();
-        live = null;
-        if (st.sendOnEnd && t.trim()) answer(t.trim(), { voice: true, secs });
-        st.sendOnEnd = false;
+        st.finalText = finalText;
+        finish(true);
       },
     });
     try {
       st.rec.start();
-      st.startedAt = Date.now();
-      st.sendOnEnd = true;
-      recUI(true);
     } catch {
-      bot('No pude iniciar el micrófono. Escríbeme tu respuesta.');
+      return bot('No pude iniciar el micrófono. Escríbeme tu respuesta.');
     }
+    st.startedAt = Date.now();
+    recUI(true);
+    // Si en 8 s no llega nada de texto, el navegador no está transcribiendo: se avisa y se libera la pantalla.
+    watchdog = setTimeout(() => {
+      if (st.recording && !st.heard) {
+        st.rec.cancel();
+        st.errorShown = true;
+        finish(false);
+        bot(noVoiceHelp());
+        text.focus();
+      }
+    }, 8000);
   }
   function stopRec(send = true) {
     if (!st.recording) return;
-    st.sendOnEnd = send;
-    send ? st.rec.stop() : st.rec.cancel();
-    if (!send) recUI(false);
+    if (!send) { st.rec.cancel(); return finish(false); }
+    st.rec.stop();
+    // El navegador debería avisar que terminó; si no lo hace en 1.5 s, se envía lo que ya se escuchó.
+    forceEnd = setTimeout(() => finish(true), 1500);
   }
   function recUI(on) {
     st.recording = on;
     $('#vaRec', root).hidden = !on;
+    live.hidden = !on;
+    if (on) live.textContent = isAndroid ? 'Habla ahora… se envía solo al terminar' : 'Habla ahora… y toca enviar';
     $('#vaComposer', root).hidden = on;
     status.textContent = on ? 'escuchando…' : 'te ayudo a publicar';
     clearInterval(tick);
@@ -378,30 +409,9 @@ export function mountAssistant(ctx) {
   }
 
   const mic = $('#vaMic', root);
-  let downAt = 0;
-  let startX = 0;
-  mic.addEventListener('pointerdown', (ev) => {
-    ev.preventDefault();
-    if (!localStorage.getItem(MIC_OK)) return explainMic();
-    downAt = Date.now();
-    startX = ev.clientX;
-    mic.setPointerCapture?.(ev.pointerId);
-    startRec();
-  });
-  mic.addEventListener('pointermove', (ev) => {
-    if (st.recording && downAt && startX - ev.clientX > 90) { downAt = 0; stopRec(false); toast('Grabación cancelada'); }
-  });
-  mic.addEventListener('pointerup', () => {
-    if (!downAt) return;
-    const held = Date.now() - downAt;
-    downAt = 0;
-    if (held > 450) stopRec(true);
-  });
-  mic.addEventListener('keydown', (ev) => {
-    if ((ev.key === 'Enter' || ev.key === ' ') && !st.recording) { ev.preventDefault(); localStorage.getItem(MIC_OK) ? startRec() : explainMic(); }
-  });
+  mic.addEventListener('click', () => (localStorage.getItem(MIC_OK) ? startRec() : explainMic()));
   $('#vaStop', root).addEventListener('click', () => stopRec(true));
-  $('#vaCancel', root).addEventListener('click', () => stopRec(false));
+  $('#vaCancel', root).addEventListener('click', () => { stopRec(false); toast('Grabación cancelada'); });
 
   function explainMic() {
     const b = bot(`<strong><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg> Antes de usar el micrófono</strong>
@@ -413,7 +423,7 @@ export function mountAssistant(ctx) {
       </ul>
       <div class="two"><button type="button" class="btn sm" data-ok>Entendido</button><button type="button" class="btn ghost sm" data-no>Mejor escribo</button></div>`,
       'Antes de usar el micrófono: no guardamos tu audio y nada se publica sin tu confirmación.');
-    $('[data-ok]', b).addEventListener('click', () => { localStorage.setItem(MIC_OK, '1'); b.querySelector('.two').remove(); bot('Listo. <strong>Mantén presionado <svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></strong> y suelta para enviar, o tócalo una vez y luego <svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg>.'); });
+    $('[data-ok]', b).addEventListener('click', () => { localStorage.setItem(MIC_OK, '1'); b.querySelector('.two').remove(); bot(`Listo. Toca <strong>el micrófono</strong>, habla y ${isAndroid ? 'al terminar de hablar se envía solo' : 'toca <strong>enviar</strong>'}.`); startRec(); });
     $('[data-no]', b).addEventListener('click', () => { b.querySelector('.two').remove(); text.focus(); });
   }
 
@@ -438,8 +448,8 @@ export function mountAssistant(ctx) {
     if (!msgs.children.length) {
       const muni = municipality(form.get().municipality || user.municipality);
       bot(canRecognize
-        ? `Hola, ${e(user.name.split(' ')[0])} Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 12, normalmente 25, y 50 de cebolla a 8…”</em>`
-        : `Hola, ${e(user.name.split(' ')[0])} Este navegador no permite dictar; <strong>escríbeme</strong> como en WhatsApp, también varios productos a la vez.`,
+        ? `Hola, ${e(user.name.split(' ')[0])}. Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 12, normalmente 25, y 50 de cebolla a 8…”</em>`
+        : `Hola, ${e(user.name.split(' ')[0])}. ${brokenRecognizer ? 'Este navegador no convierte la voz en texto; para dictar ábrelo en <strong>Chrome</strong>, <strong>Edge</strong> o <strong>Safari</strong>.' : 'Este navegador no permite dictar.'} Aquí puedes <strong>escribirme</strong> como en WhatsApp, también varios productos a la vez.`,
         canRecognize ? 'Hola. Dime qué quieres vender.' : '');
       bot(`<span class="tiny muted">Zona: ${e(muni?.name || '')} (de tu perfil; puedes decir otra).</span>`);
     }
@@ -454,5 +464,8 @@ export function mountAssistant(ctx) {
     root.hidden = true;
     document.body.classList.remove('va-open');
   }
-  return { open, close, destroy: () => { close(); root.remove(); } };
+  // Si el usuario regresa con el botón Atrás del teléfono, se cierra el asistente (no se queda encima de la página).
+  const onNav = () => { if (!root.hidden) close(); };
+  window.addEventListener('hashchange', onNav);
+  return { open, close, destroy: () => { close(); window.removeEventListener('hashchange', onNav); root.remove(); } };
 }

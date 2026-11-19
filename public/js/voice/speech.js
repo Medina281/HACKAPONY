@@ -3,7 +3,11 @@
 // Raíz Directa no graba ni guarda audio ni transcripciones.
 
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-export const canRecognize = !!SR;
+const UA = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+// Navegadores que exponen la API pero no transcriben (Opera/Opera GX, Brave, Firefox, app de escritorio Electron).
+export const brokenRecognizer = /\bOPR\/|OPRGX|Electron\/|Firefox\//.test(UA) || (typeof navigator !== 'undefined' && !!navigator.brave);
+export const canRecognize = !!SR && !brokenRecognizer;
+export const isAndroid = /Android/i.test(UA);
 export const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
 export const ERROR_TEXT = {
@@ -22,7 +26,8 @@ export function createRecognizer({ onText, onEnd, onError }) {
   const rec = new SR();
   rec.lang = 'es-MX';
   rec.interimResults = true;
-  rec.continuous = true;
+  // En Android el modo continuo duplica el texto: ahí se dicta una frase y se envía sola al terminar de hablar.
+  rec.continuous = !isAndroid;
   rec.maxAlternatives = 1;
   let finalText = '';
   let cancelled = false;
@@ -36,8 +41,8 @@ export function createRecognizer({ onText, onEnd, onError }) {
   rec.onend = () => onEnd?.(cancelled ? '' : finalText.trim());
   return {
     start: () => { cancelled = false; finalText = ''; rec.start(); },
-    stop: () => rec.stop(),
-    cancel: () => { cancelled = true; rec.abort(); },
+    stop: () => { try { rec.stop(); } catch { /* ya terminó */ } },
+    cancel: () => { cancelled = true; try { rec.abort(); } catch { /* ya terminó */ } },
   };
 }
 

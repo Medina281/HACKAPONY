@@ -677,3 +677,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 .alert { border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.4; }
 .alert.error { background: #FDECEC; color: #8A1C1C; border: 1px solid #F3C2C2; }
 .alert ul { margin: 6px 0 0 18px; padding: 0; }
+
+/* Texto en vivo mientras se dicta */
+.va-live { background: #fff; border-top: 1px solid var(--line); padding: 10px 14px; font-size: 15px; line-height: 1.35; min-height: 44px; max-height: 30vh; overflow-y: auto; color: var(--ink, #1d2a22); }
+.va-live[hidden] { display: none; }
+.va-recbar .va-round, .va-recbar .va-icon { min-width: 52px; min-height: 52px; }
