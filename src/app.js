@@ -26,6 +26,8 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
 
   // ---------- Autenticación ----------
   route('POST', '/api/auth/register', ({ body, t, res }) => {
+    if (body.role === 'transportista')
+      throw bad('Los transportistas los da de alta su productor desde su panel', { role: 'Pide a tu productor que te registre' });
     const v = validateRegistration(body);
     if (db.prepare('SELECT 1 FROM users WHERE phone = ?').get(v.phone))
       throw bad('Ese teléfono ya está registrado', { phone: 'Ya registrado; inicia sesión' });
@@ -75,13 +77,10 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     if (Object.keys(e).length) throw bad('Revisa los datos', e);
     if (user.role === 'transportista') {
       const cap = body.capacity_kg != null ? Math.round(Number(body.capacity_kg)) : user.capacity_kg;
-      const radius = body.radius_km != null ? Math.round(Number(body.radius_km)) : user.radius_km;
       if (!(cap > 0 && cap <= 40000)) throw bad('Capacidad no válida', { capacity_kg: 'Entre 1 y 40,000 kg' });
-      if (!(radius >= 5 && radius <= 300)) throw bad('Radio no válido', { radius_km: 'Entre 5 y 300 km' });
-      db.prepare('UPDATE users SET vehicle=?, capacity_kg=?, refrigerated=?, radius_km=?, available=? WHERE id=?').run(
+      db.prepare('UPDATE users SET vehicle=?, capacity_kg=?, refrigerated=? WHERE id=?').run(
         body.vehicle != null ? str(body.vehicle, 60) || 'Camioneta' : user.vehicle, cap,
-        body.refrigerated != null ? (body.refrigerated ? 1 : 0) : user.refrigerated, radius,
-        body.available != null ? (body.available ? 1 : 0) : user.available, user.id,
+        body.refrigerated != null ? (body.refrigerated ? 1 : 0) : user.refrigerated, user.id,
       );
     }
     db.prepare('UPDATE users SET name=?, business_name=?, phone=?, municipality=?, pickup_point=? WHERE id=?').run(
@@ -162,33 +161,55 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     return { summary: stats.buyerSummary(db, user) };
   });
 
-  // ---------- Fletes (transportistas independientes) ----------
+  // ---------- Entregas con el transporte propio del productor ----------
   route('POST', '/api/deliveries', ({ user, body, t }) => {
     auth.requireRole(user, 'comprador');
     const id = deliveries.requestDelivery(db, t, user, body);
     return [201, { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, id), user) }];
   });
-  route('GET', '/api/deliveries', ({ user, query }) => {
-    auth.requireRole(user, 'transportista');
-    return { deliveries: deliveries.listForCarrier(db, user, query.scope === 'mine' ? 'mine' : 'open', { all: query.all === '1' }) };
+  route('GET', '/api/deliveries', ({ user }) => {
+    auth.requireRole(user, 'transportista', 'productor');
+    return { deliveries: user.role === 'productor' ? deliveries.listForProducer(db, user) : deliveries.listForCarrier(db, user) };
   });
   route('GET', '/api/deliveries/:id', ({ user, params }) => {
     auth.requireRole(user);
-    const d = deliveries.getDeliveryRow(db, Number(params.id));
-    const s = deliveries.serializeDelivery(d, user);
-    // Un transportista puede ver un flete abierto (sin datos de contacto) o uno que sea suyo.
-    if (s.role === 'publico' && !(user.role === 'transportista' && d.status === 'abierta')) throw new HttpError(403, 'No tienes acceso a este flete');
+    const s = deliveries.serializeDelivery(deliveries.getDeliveryRow(db, Number(params.id)), user);
+    if (s.role === 'publico') throw new HttpError(403, 'No tienes acceso a esta entrega');
     return { delivery: s };
   });
   route('POST', '/api/deliveries/:id/:action', ({ user, params, body, t }) => {
     auth.requireRole(user);
     deliveries.actOnDelivery(db, t, user, Number(params.id), params.action, body);
-    const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-    return { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, Number(params.id)), fresh) };
+    return { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, Number(params.id)), user) };
   });
   route('GET', '/api/carrier/summary', ({ user }) => {
     auth.requireRole(user, 'transportista');
-    return { summary: deliveries.carrierSummary(db, user) };
+    const boss = user.employer_id ? db.prepare('SELECT name, business_name, phone, municipality FROM users WHERE id = ?').get(user.employer_id) : null;
+    return { summary: deliveries.carrierSummary(db, user), employer: boss ? { name: boss.business_name || boss.name, phone: boss.phone, municipality: boss.municipality } : null };
+  });
+
+  // ---------- Transportistas del productor (su propio personal) ----------
+  route('GET', '/api/producer/drivers', ({ user }) => {
+    auth.requireRole(user, 'productor');
+    return { drivers: deliveries.listDrivers(db, user) };
+  });
+  route('POST', '/api/producer/drivers', ({ user, body, t }) => {
+    auth.requireRole(user, 'productor');
+    const v = validateRegistration({ ...body, role: 'transportista', municipality: user.municipality });
+    if (db.prepare('SELECT 1 FROM users WHERE phone = ?').get(v.phone)) throw bad('Ese teléfono ya está registrado', { phone: 'Ya registrado' });
+    const r = db.prepare(`INSERT INTO users (role, name, phone, password_hash, municipality, created_at, vehicle, capacity_kg, refrigerated, employer_id)
+      VALUES ('transportista',?,?,?,?,?,?,?,?,?)`).run(v.name, v.phone, auth.hashPassword(v.password), user.municipality, t, v.vehicle, v.capacity_kg, v.refrigerated, user.id);
+    return [201, { drivers: deliveries.listDrivers(db, user), id: Number(r.lastInsertRowid) }];
+  });
+  route('PATCH', '/api/producer/drivers/:id', ({ user, params, body }) => {
+    auth.requireRole(user, 'productor');
+    const d = db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'transportista' AND employer_id = ?`).get(Number(params.id), user.id);
+    if (!d) throw new HttpError(404, 'Transportista no encontrado');
+    if (body.active === false && db.prepare(`SELECT 1 FROM deliveries WHERE carrier_id = ? AND status IN ('asignada','recogida')`).get(d.id))
+      throw new HttpError(409, 'Tiene entregas en curso; reasígnalas antes de darlo de baja');
+    db.prepare('UPDATE users SET active = ? WHERE id = ?').run(body.active === false ? 0 : 1, d.id);
+    if (body.active === false) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(d.id);
+    return { drivers: deliveries.listDrivers(db, user) };
   });
 
   // ---------- Precios de mercado (SNIIM) ----------
@@ -274,8 +295,8 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
       orders: db.prepare(`SELECT o.folio, o.status, o.qty_g, o.total_rescue_c, o.created_at, o.is_demo, l.product, b.business_name buyer, p.name producer
         FROM orders o JOIN lots l ON l.id=o.lot_id JOIN users b ON b.id=o.buyer_id JOIN users p ON p.id=o.producer_id ORDER BY o.id DESC LIMIT 200`).all(),
       deliveries: db.prepare(`SELECT d.id, d.status, d.fee_c, d.distance_km, d.weight_g, d.from_muni, d.to_muni, d.created_at, o.folio, l.product,
-        b.business_name buyer, c.name carrier FROM deliveries d JOIN orders o ON o.id=d.order_id JOIN lots l ON l.id=o.lot_id
-        JOIN users b ON b.id=d.buyer_id LEFT JOIN users c ON c.id=d.carrier_id ORDER BY d.id DESC LIMIT 200`).all(),
+        b.business_name buyer, COALESCE(p.business_name, p.name) producer, c.name carrier FROM deliveries d JOIN orders o ON o.id=d.order_id JOIN lots l ON l.id=o.lot_id
+        JOIN users b ON b.id=d.buyer_id JOIN users p ON p.id=d.producer_id LEFT JOIN users c ON c.id=d.carrier_id ORDER BY d.id DESC LIMIT 200`).all(),
       market: db.prepare(`SELECT product, variety, scope, market, price_date, freq_c, fetched_at FROM market_prices m
         WHERE fetched_at = (SELECT MAX(fetched_at) FROM market_prices WHERE product = m.product) ORDER BY product`).all(),
       market_errors: db.prepare('SELECT product, error, fetched_at FROM market_fetch_log ORDER BY id DESC LIMIT 10').all(),

@@ -12,12 +12,14 @@ const routes = [
   ['/registro', () => import('./views/auth.js'), { mode: 'register' }],
   ['/productor', () => import('./views/producer.js'), { role: 'productor' }],
   ['/productor/pedidos', () => import('./views/producerOrders.js'), { role: 'productor' }],
+  ['/productor/equipo', () => import('./views/team.js'), { role: 'productor' }],
   ['/publicar', () => import('./views/publish.js'), { role: 'productor' }],
   ['/comprador', () => import('./views/buyer.js'), { role: 'comprador' }],
   ['/pedido/:folio', () => import('./views/order.js'), { auth: true }],
   ['/perfil', () => import('./views/profile.js'), { auth: true }],
   ['/admin', () => import('./views/admin.js'), { role: 'admin' }],
   ['/transportista', () => import('./views/carrier.js'), { role: 'transportista' }],
+  ['/entrega/:id', () => import('./views/trip.js'), { auth: true }],
   ['/flete/:id', () => import('./views/trip.js'), { auth: true }],
   ['/privacidad', () => import('./views/legal.js'), { page: 'privacidad' }],
   ['/creditos', () => import('./views/legal.js'), { page: 'creditos' }],
@@ -32,7 +34,7 @@ const NAV = {
   guest: [['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/mapa', '<svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg>', 'Mapa'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/entrar', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Entrar']],
   productor: [['#/productor', '<svg class="i" aria-hidden="true"><use href="/icons.svg#home"/></svg>', 'Inicio'], ['#/productor/pedidos', '<svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg>', 'Pedidos'], ['#/publicar', '<svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg>', 'Publicar', true], ['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
   comprador: [['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/mapa', '<svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg>', 'Mapa'], ['#/comprador', '<svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg>', 'Pedidos'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
-  transportista: [['#/transportista', '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'Viajes'], ['#/transportista?tab=mios', '<svg class="i" aria-hidden="true"><use href="/icons.svg#navigation"/></svg>', 'Mis viajes'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
+  transportista: [['#/transportista', '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'Entregas'], ['#/transportista?tab=historial', '<svg class="i" aria-hidden="true"><use href="/icons.svg#navigation"/></svg>', 'Historial'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
   admin: [['#/admin', '<svg class="i" aria-hidden="true"><use href="/icons.svg#shield"/></svg>', 'Admin'], ['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
 };
 
@@ -40,7 +42,7 @@ export function renderNav() {
   const items = NAV[state.user?.role || 'guest'];
   const full = '#' + (location.hash.slice(1) || '/');
   const cur = full.split('?')[0];
-  const isActive = (h) => (h.includes('?') ? full === h : cur === h && !(h === '#/transportista' && full.includes('tab=mios'))) || (h !== '#/' && cur.startsWith(h + '/') && h !== '#/productor');
+  const isActive = (h) => (h.includes('?') ? full === h : cur === h && !(h === '#/transportista' && full.includes('tab=historial'))) || (h !== '#/' && cur.startsWith(h + '/') && h !== '#/productor');
   $('#bottomnav').innerHTML = items
     .map(([h, i, l, fab]) => `<a href="${h}" class="${fab ? 'fab' : isActive(h) ? 'active' : ''}" aria-label="${e(l)}"><span aria-hidden="true">${i}</span>${fab ? '' : e(l)}</a>`)
     .join('');

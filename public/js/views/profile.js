@@ -8,7 +8,7 @@ export default async function profile({ app }) {
   app.innerHTML = `
   <div class="wrap page" style="max-width:560px">
     <h1>Mi perfil</h1>
-    <p class="muted">${isProducer ? 'Productor / distribuidor' : u.role === 'comprador' ? 'Comercio' : u.role === 'transportista' ? 'Transportista independiente' : 'Administración'}</p>
+    <p class="muted">${isProducer ? 'Productor / distribuidor' : u.role === 'comprador' ? 'Comercio' : u.role === 'transportista' ? 'Transportista (personal del productor)' : 'Administración'}</p>
     <form id="pf" class="card" novalidate>
       <div class="field"><label for="name">Nombre</label><input id="name" name="name" value="${e(u.name)}"><div class="err" data-for="name"></div></div>
       <div class="field"><label for="business_name">${isProducer ? 'Huerta o negocio' : 'Negocio'}</label><input id="business_name" name="business_name" value="${e(u.business_name || '')}"></div>
@@ -16,8 +16,7 @@ export default async function profile({ app }) {
       <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions(u.municipality)}</select><div class="err" data-for="municipality"></div></div>
       ${isProducer ? `<div class="field"><label for="pickup_point">Punto de recolección habitual</label><input id="pickup_point" name="pickup_point" value="${e(u.pickup_point || '')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Se usa por defecto al publicar. Sólo lo ven compradores con pedido.</div></div>` : ''}
       ${u.role === 'transportista' ? `<div class="field"><label for="vehicle">Vehículo</label><input id="vehicle" name="vehicle" value="${e(u.vehicle || '')}"></div>
-      <div class="two"><div class="field"><label for="capacity_kg">Carga máxima (kg)</label><input id="capacity_kg" name="capacity_kg" inputmode="numeric" value="${e(u.capacity_kg || '')}"><div class="err" data-for="capacity_kg"></div></div>
-      <div class="field"><label for="radius_km">Radio de trabajo (km)</label><input id="radius_km" name="radius_km" inputmode="numeric" value="${e(u.radius_km || 40)}"><div class="err" data-for="radius_km"></div></div></div>
+      <div class="field"><label for="capacity_kg">Carga máxima (kg)</label><input id="capacity_kg" name="capacity_kg" inputmode="numeric" value="${e(u.capacity_kg || '')}"><div class="err" data-for="capacity_kg"></div></div>
       <div class="field"><label class="inline-check"><input type="checkbox" name="refrigerated" ${u.refrigerated ? 'checked' : ''}><span>Tengo refrigeración</span></label></div>` : ''}
       <button class="btn big">Guardar</button>
     </form>

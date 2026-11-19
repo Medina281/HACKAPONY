@@ -1,3 +1,4 @@
+import { currentPrice } from './lots.js';
 import crypto from 'node:crypto';
 import { tx } from '../db.js';
 import { HttpError, bad } from '../http.js';
@@ -70,7 +71,8 @@ export function reserve(db, now, buyer, lotId, body, { isDemo = 0 } = {}) {
       .run(qty, lotId, qty, now);
     if (upd.changes !== 1) throw new HttpError(409, 'Otra persona apartó este producto antes. Revisa lo disponible.');
 
-    const t = orderTotals(qty, lot.ref_price_c, lot.rescue_price_c);
+    const unit = currentPrice(lot, now).cents; // precio vigente en el momento de apartar
+    const t = orderTotals(qty, lot.ref_price_c, unit);
     const code = String(crypto.randomInt(100000, 1000000));
     const r = db
       .prepare(
@@ -79,7 +81,7 @@ export function reserve(db, now, buyer, lotId, body, { isDemo = 0 } = {}) {
          VALUES (?,?,?,?,?,?,?,?,?,'apartado',?,?,?,?,?,?)`,
       )
       .run(
-        lotId, buyer.id, lot.producer_id, qty, lot.ref_price_c, lot.rescue_price_c, t.refTotal, t.rescueTotal,
+        lotId, buyer.id, lot.producer_id, qty, lot.ref_price_c, unit, t.refTotal, t.rescueTotal,
         t.savings, pickupAt, pickupAt + GRACE_MS, code, isDemo, now, now,
       );
     const id = Number(r.lastInsertRowid);
@@ -128,7 +130,7 @@ export function transition(db, now, user, folio, action, body = {}) {
     let note = null;
     if (action === 'entregar') {
       const fl = db.prepare(`SELECT status FROM deliveries WHERE order_id = ? AND status IN ('asignada','recogida')`).get(o.id);
-      if (fl) throw new HttpError(409, 'Este pedido lo entrega un transportista: captura su código en "Entregar al transportista".');
+      if (fl) throw new HttpError(409, 'Este pedido lo lleva tu transportista; él captura el código del comprador al entregar.');
       const tries = codeAttempts.get(o.id) || 0;
       if (tries >= 5) throw new HttpError(429, 'Demasiados intentos con código incorrecto. Contacta a soporte.');
       if (String(body.code || '').trim() !== o.delivery_code) {
@@ -155,7 +157,7 @@ export function transition(db, now, user, folio, action, body = {}) {
     }
     if (action === 'cancelar') {
       const fl = db.prepare(`SELECT status FROM deliveries WHERE order_id = ? AND status = 'recogida'`).get(o.id);
-      if (fl && actorRole !== 'admin') throw new HttpError(409, 'El producto ya va en camino con el transportista; no se puede cancelar.');
+      if (fl && actorRole !== 'admin') throw new HttpError(409, 'El pedido ya va en camino; no se puede cancelar.');
       db.prepare(`UPDATE deliveries SET status='cancelada', cancel_reason='Pedido cancelado' WHERE order_id = ? AND status IN ('abierta','asignada')`).run(o.id);
     }
     db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(t.to, now, o.id);
@@ -231,7 +233,7 @@ export function getOrder(db, user, folio) {
     out.delivery = {
       id: d.id, status: d.status, fee_c: d.fee_c, address: d.address, to_muni: d.to_muni, distance_km: d.distance_km,
       needs_cold: !!d.needs_cold, cancel_reason: d.cancel_reason,
-      carrier: d.carrier_id ? { name: d.carrier_name, phone: d.carrier_phone, vehicle: d.carrier_vehicle } : null,
+      carrier: d.carrier_id ? { id: d.carrier_id, name: d.carrier_name, phone: d.carrier_phone, vehicle: d.carrier_vehicle } : null,
     };
   }
   return out;

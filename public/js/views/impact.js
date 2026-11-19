@@ -59,7 +59,7 @@ export default async function impact({ app, query }) {
       <ul class="small">
         <li><strong>Rescatado:</strong> suma de kilos de pedidos en estado “recolectado”, que sólo se alcanza cuando el productor captura el código de entrega del comprador.</li>
         <li><strong>Ingresos para productores:</strong> importe a precio de rescate de esas entregas. Es un valor bruto: no descuenta costos del productor.</li>
-        <li><strong>Ahorro de comercios:</strong> (precio habitual declarado − precio de rescate) × kg entregados. El precio habitual lo declara el productor; no está validado contra precios de mercado (SNIIM), por lo que es una referencia.</li>
+        <li><strong>Ahorro de comercios:</strong> (precio del productor − precio de rescate al apartar) × kg entregados. El precio del productor lo declara él; no está validado contra precios de mercado (SNIIM), por lo que es una referencia.</li>
         <li><strong>Sin métricas ambientales:</strong> no mostramos CO₂ evitado porque requeriría factores de emisión por producto con fuente verificable; queda como trabajo futuro.</li>
       </ul>
     </details>

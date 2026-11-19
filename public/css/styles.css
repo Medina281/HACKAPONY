@@ -685,3 +685,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 
 /* Lo oculto siempre se oculta (algunas reglas de display lo anulaban) */
 [hidden] { display: none !important; }
+
+@media (min-width: 640px) { .big-actions { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .big-actions { grid-template-columns: repeat(4, 1fr); } }
+
+@media (min-width: 760px) { .role-cards { grid-template-columns: repeat(2, 1fr); } }
+
+/* Tramos del precio automático */
+.tiers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 8px 0 10px; }
+.tier { background: rgba(255,255,255,.14); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.tier span { font-size: 12px; opacity: .85; } .tier b { font-size: 18px; } .tier small { font-size: 11px; opacity: .8; }
+.price-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.price-steps div { border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px; font-size: 12px; text-align: center; background: #fff; }
+.price-steps div.now { border-color: var(--green); background: #E9F8F0; font-weight: 700; }
+.price-steps b { display: block; font-size: 15px; }

@@ -35,11 +35,11 @@
 
 Preparación: `npm run demo`, dos navegadores (o celular + laptop), el dashboard en “Sólo reales” mostrando ceros.
 
-1. **Productor** (4430000001) → *Publicar producto* → en el cuadro de voz: “Tengo 100 kilos de jitomate a 12 pesos el kilo, normalmente a 25, me quedan 24 horas” → *Llenar* → marcar la declaración → *Publicar*. La pantalla muestra los segundos que tardó.
-2. **Comprador** (4430000101) → Ofertas → Jitomate → 20 kg → el sistema muestra $500 / $240 / ahorro $260 / 52% → abrir “¿Me conviene por el traslado?” → *Apartar*.
+1. **Productor** (4430000001) → *Publicar producto* → en el cuadro de voz: “Tengo 100 kilos de jitomate a 25 el kilo, en buen estado, me quedan 24 horas” (la app pone sola el precio de rescate: $20, −20 %) → *Llenar* → marcar la declaración → *Publicar*. La pantalla muestra los segundos que tardó.
+2. **Comprador** (4430000101) → Ofertas → Jitomate → 20 kg → el sistema muestra $500 / $400 / ahorro $100 / 20 % (y cómo bajará el precio por tramos) → abrir “¿Me conviene por el traslado?” → *Apartar*.
 3. Confirmación **RD-00xx** con código de 6 dígitos y botón de WhatsApp con el mensaje prellenado. Volver a la oferta: **80 kg disponibles**.
 4. **Productor**: aparece 🔔 → *Revisar pedidos* → Confirmar → Listo → captura un código equivocado (se rechaza) y luego el correcto → **Recolectado**.
-5. **Impacto → Sólo reales**: 20 kg rescatados · $240 para el productor · $260 de ahorro.
+5. **Impacto → Sólo reales**: 20 kg rescatados · $400 para el productor · $100 de ahorro.
 6. (Si sobra tiempo) Intentar apartar 999 kg → “Sólo quedan 80 kg”.
 
 **Variante con el asistente de voz (diferenciador, ~40 s):** *Publicar hablando* → mantener 🎤 y decir “Tengo cien kilos de jitomate a doce pesos el kilo, normalmente a veinticinco, me quedan hasta mañana” → el asistente anota los datos, pregunta el estado y, como “hasta mañana” no es un número, pregunta las horas ofreciendo la estimación por clima → resumen → marcar declaración → ✅ Publicar. Ensayarlo antes en el teléfono del evento con Chrome, con internet y con el permiso del micrófono ya concedido.
@@ -58,7 +58,7 @@ Respaldo: si falla el Wi-Fi, todo corre en `localhost`; sólo el mapa necesita i
 
 **¿Cómo funciona sin conexión estable?** Es una PWA ligera (sin fuentes externas, fotos reducidas en el teléfono, mapa sólo bajo demanda). Sin señal se pueden consultar las ofertas guardadas, marcadas como desactualizadas, y el formulario guarda borrador. Apartar y publicar **requieren** confirmación del servidor; nunca se simula un apartado sin conexión.
 
-**¿Quién se encarga del transporte?** Transportistas independientes registrados toman los fletes que pide el comercio; la entrega se verifica con dos códigos (recolección y entrega). No ofrecemos flotilla propia. Antes: El comprador recoge, o el productor si marcó “puedo llevarlo” (costo a acordar). No prometemos logística propia. La calculadora de ahorro neto ayuda a decidir si conviene el viaje.
+**¿Quién se encarga del transporte?** El propio productor, con su personal: él da de alta a su transportista en la app y le asigna las entregas a domicilio que piden los comercios; la entrega se verifica con el código del comercio. No ofrecemos flotilla ni fletes de terceros. Si el productor no entrega, el comercio recoge en su punto. La calculadora de ahorro neto ayuda a decidir si conviene el viaje.
 
 **¿Y si el alimento no es apto para consumo?** No existe la opción “no apto” para publicar; hay una declaración obligatoria y estados declarados (excedente, imperfección, maduro, próximo a perder valor). Al recoger, el comprador puede cancelar con “no corresponde”: se abre un reporte, el inventario no se reactiva y la oferta se pausa para revisión. El temporizador no certifica inocuidad y así se indica.
 
@@ -130,7 +130,7 @@ Respaldo: si falla el Wi-Fi, todo corre en `localhost`; sólo el mapa necesita i
 | Criterio | Máx | Estimado | Evidencia | Qué podría restar |
 |---|---|---|---|---|
 | Ejecución y estabilidad | 10 | 9 | 12/12 pruebas; flujo E2E en navegador sin errores de consola (salvo 400 intencionales y mapa sin red) | Wi-Fi del evento |
-| Flujo principal del MVP | 15 | 14 | Escenario completo 100 kg → 20 kg → $500/$240/$260/52% → 80 kg → entregado → dashboard | Demo apresurada |
+| Flujo principal del MVP | 15 | 14 | Escenario completo 100 kg → 20 kg → $500/$400/$100/20 % (precio automático) → 80 kg → entregado → dashboard | Demo apresurada |
 | Funcionalidades esenciales | 10 | 9 | 4 requerimientos + parcial, cancelación, vencimiento, código, mapa, admin | Mapa depende de internet |
 | Lógica y manejo de datos | 7 | 7 | Enteros, CHECK/FK, transacciones, máquina de estados | — |
 | Integración y respuesta | 3 | 2 | WhatsApp por enlaces, voz del navegador, PWA | Sin API oficial de WhatsApp |

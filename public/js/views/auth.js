@@ -5,13 +5,13 @@ import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
 const DEMO = [
   ['Productor (Tarímbaro)', '4430000001'],
   ['Comprador (Fonda en Morelia)', '4430000101'],
-  ['Transportista (Morelia)', '4430000201'],
+  ['Transportista de Ramiro', '4430000201'],
   ['Administrador', '4430000999'],
 ];
 
 export default async function authView({ app, opts, query }) {
   if (opts.mode === 'login') return login(app);
-  return register(app, ['comprador', 'productor', 'transportista'].includes(query.rol) ? query.rol : null);
+  return register(app, ['comprador', 'productor'].includes(query.rol) ? query.rol : null);
 }
 
 function login(app) {
@@ -73,7 +73,6 @@ function register(app, role) {
         <div class="seg" role="radiogroup">
           <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> Vendo</button>
           <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg> Compro</button>
-          <button type="button" data-role="transportista" class="${role === 'transportista' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Transporto</button>
         </div>
         <div class="err" data-for="role"></div>
       </div>
@@ -99,6 +98,7 @@ function register(app, role) {
       <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
       <div class="field"><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mínimo 8 caracteres.</div><div class="err" data-for="password"></div></div>
       <div class="field"><label for="email">Correo <span class="muted">(opcional)</span></label><input id="email" name="email" type="email" autocomplete="email"><div class="err" data-for="email"></div></div>
+      <p class="tiny muted">¿Eres transportista? Te da de alta el productor con el que trabajas, desde su panel “Mi transporte”.</p>
       <p class="tiny muted">Tus datos de contacto sólo se usan para coordinar pedidos. Lee el <a href="#/privacidad">aviso de privacidad</a>. El correo es opcional.</p>
       <button class="btn big" type="submit">Crear cuenta</button>
       <p class="center small" style="margin-top:12px">¿Ya tienes cuenta? <a href="#/entrar">Entra</a></p>

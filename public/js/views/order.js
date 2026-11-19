@@ -1,7 +1,6 @@
 import { api } from '../api.js';
 import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer } from '../ui.js';
 import { qualityLabel, municipality, MUNICIPALITIES } from '../shared/catalog.js';
-import { haversineKm, ROAD_FACTOR, netSavings, pesosToCents } from '../shared/calc.js';
 import { reportDialog } from './lot.js';
 
 const STEPS = ['apartado', 'confirmado', 'listo', 'recolectado'];
@@ -12,6 +11,9 @@ const CANCEL_REASONS = {
 
 export default async function orderView({ app, params, state }) {
   const { order: o } = await api(`/api/orders/${params.folio}`);
+  // El productor elige a quién de su personal manda; sólo hace falta la lista si hay entrega por asignar.
+  const drivers = o.role === 'productor' && o.delivery && ['abierta', 'asignada'].includes(o.delivery.status)
+    ? (await api('/api/producer/drivers')).drivers.filter((x) => x.active) : [];
   const isBuyer = o.role === 'comprador';
   const isProducer = o.role === 'productor';
   const active = ['apartado', 'confirmado', 'listo'].includes(o.status);
@@ -41,7 +43,7 @@ export default async function orderView({ app, params, state }) {
         <dl class="kv">
           <dt>Producto</dt><dd>${e(o.product)} · <span class="muted">${e(qualityLabel(o.quality))}</span></dd>
           <dt>Cantidad</dt><dd>${kg(o.qty_g)}</dd>
-          <dt>Precio</dt><dd>${mxn(o.unit_rescue_c)}/kg <span class="muted">(habitual declarado ${mxn(o.unit_ref_c)})</span></dd>
+          <dt>Precio</dt><dd>${mxn(o.unit_rescue_c)}/kg <span class="muted">(precio del productor ${mxn(o.unit_ref_c)})</span></dd>
           <dt>Importe total</dt><dd style="font-size:1.25rem">${mxn(o.total_rescue_c)}</dd>
           <dt>Ahorro</dt><dd style="color:var(--green)">${mxn(o.savings_c)} <span class="muted">(${mxn(o.total_ref_c)} − ${mxn(o.total_rescue_c)})</span></dd>
           <dt>${isBuyer ? 'Productor' : 'Comercio'}</dt><dd>${e(isBuyer ? o.producer.name : `${o.buyer.name} · ${o.buyer.contact}`)}</dd>
@@ -60,7 +62,7 @@ export default async function orderView({ app, params, state }) {
           <p class="tiny muted">“Cómo llegar” busca la referencia escrita por el productor; confirma la ubicación exacta por WhatsApp.</p>
         </div>` : ''}
 
-        ${deliveryBlock(o, isBuyer, isProducer, active, state)}
+        ${deliveryBlock(o, isBuyer, isProducer, active, state, drivers)}
 
         ${isProducer && active ? `<div class="card stack" style="background:var(--cream)">
           ${o.status === 'apartado' ? `<button class="btn block" data-act="confirmar"><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> Confirmar pedido</button>` : ''}
@@ -104,14 +106,14 @@ export default async function orderView({ app, params, state }) {
   });
   $('#report').addEventListener('click', () => reportDialog({ folio: o.folio }));
 
-  // ---------- Flete ----------
+  // ---------- Entrega a domicilio (transporte del productor) ----------
   $('#askTruck')?.addEventListener('click', () => { $('#truckForm').hidden = false; $('#askTruck').hidden = true; });
   $('#truckForm')?.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const fd = Object.fromEntries(new FormData(ev.target));
     try {
       await api('/api/deliveries', { method: 'POST', body: { ...fd, folio: o.folio, needs_cold: !!fd.needs_cold } });
-      toast('Listo: avisamos a transportistas cercanos <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'ok');
+      toast('Listo: el productor ya sabe que se lo lleve', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
@@ -119,18 +121,18 @@ export default async function orderView({ app, params, state }) {
   });
   $('#cancelTruck')?.addEventListener('click', async () => {
     try {
-      await api(`/api/deliveries/${o.delivery.id}/cancel`, { method: 'POST', body: { reason: 'Lo recojo yo' } });
-      toast('Flete cancelado');
+      await api(`/api/deliveries/${o.delivery.id}/cancel`, { method: 'POST', body: { reason: isBuyer ? 'Lo recojo yo' : '' } });
+      toast('Entrega a domicilio cancelada');
       reload();
     } catch (err) {
       toast(err.message, 'error');
     }
   });
-  $('#handoff')?.addEventListener('submit', async (ev) => {
+  $('#assign')?.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try {
-      await api(`/api/deliveries/${o.delivery.id}/handoff`, { method: 'POST', body: { code: ev.target.code.value } });
-      toast('Producto entregado al transportista <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'ok');
+      await api(`/api/deliveries/${o.delivery.id}/assign`, { method: 'POST', body: { carrier_id: ev.target.carrier_id.value } });
+      toast('Entrega asignada a tu transportista', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
@@ -138,45 +140,43 @@ export default async function orderView({ app, params, state }) {
   });
 }
 
-const DSTATUS = { abierta: 'Buscando transportista…', asignada: 'Transportista asignado', recogida: 'En camino <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', entregada: 'Entregado por transportista', cancelada: 'Flete cancelado' };
+const I = (n) => `<svg class="i" aria-hidden="true"><use href="/icons.svg#${n}"/></svg>`;
+const DSTATUS = { abierta: 'Esperando que el productor asigne', asignada: 'Transportista asignado', recogida: 'En camino', entregada: 'Entregado', cancelada: 'Entrega cancelada' };
 
-function deliveryBlock(o, isBuyer, isProducer, active, state) {
+function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
   const d = o.delivery && o.delivery.status !== 'cancelada' ? o.delivery : null;
   if (!d) {
     if (!(isBuyer && active)) return '';
-    const from = municipality(o.municipality);
-    const to = municipality(state.user.municipality);
-    const km = Math.round(haversineKm(from, to) * ROAD_FACTOR * 10) / 10;
-    const t = JSON.parse(localStorage.getItem('rd_transport') || '{}');
-    const fuel = netSavings({ savingsCents: 0, distanceKm: km, kmPerLiter: t.kmPerLiter || 10, pricePerLiterCents: pesosToCents(t.pricePerLiter || 24) }).transportCents;
+    if (!o.producer_transport) return `<div class="small muted">${I('truck')} Este productor no ofrece entrega a domicilio: se recoge en su punto.</div>`;
     return `<div class="card stack">
-      <div class="row between"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> ¿Te lo llevan?</strong><span class="mono-tag">opcional</span></div>
-      <p class="small muted" style="margin:0">Un transportista independiente de la zona puede recogerlo y llevarlo a tu negocio. Tú ofreces el pago.</p>
-      <button class="btn secondary" id="askTruck">Pedir transportista</button>
+      <div class="row between"><strong>${I('truck')} ¿Te lo llevan?</strong><span class="mono-tag">opcional</span></div>
+      <p class="small muted" style="margin:0">${e(o.producer.name)} entrega con su propio transporte. Pídelo y te avisamos quién lo lleva.</p>
+      <button class="btn secondary" id="askTruck">Pedir entrega a domicilio</button>
       <form id="truckForm" class="stack" hidden>
         <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
-        <div class="two">
-          <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === state.user.municipality ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select></div>
-          <div class="field"><label for="fee">Ofreces pagar</label><div class="input-unit"><input id="fee" name="fee" inputmode="decimal" placeholder="Ej. 150"><span>$</span></div></div>
-        </div>
-        <p class="tiny muted" style="margin:0">Referencia: la gasolina ida y vuelta (~${km * 2} km) costaría unos ${mxn(fuel)} con tus valores de la calculadora; no incluye el tiempo del transportista.</p>
+        <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === state.user.municipality ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select></div>
         <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
         <input name="notes" placeholder="Notas (opcional): horario, referencias…">
-        <button class="btn">Publicar flete</button>
+        <p class="tiny muted" style="margin:0">Si hay costo de envío, lo acuerdas directo con el productor.</p>
+        <button class="btn">Pedir entrega</button>
       </form>
     </div>`;
   }
   const c = d.carrier;
+  const canAssign = isProducer && ['abierta', 'asignada'].includes(d.status);
   return `<div class="card stack">
-    <div class="row between"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Flete</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
-    <div class="small">${mxn(d.fee_c)} · a ${e(d.address)}${d.needs_cold ? ' · <svg class="i" aria-hidden="true"><use href="/icons.svg#snow"/></svg>' : ''}</div>
-    ${c ? `<div class="small">${e(c.name)} · ${e(c.vehicle || '')}</div>
-      ${d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> WhatsApp al transportista</a>` : ''}` : ''}
-    ${isProducer && d.status === 'asignada' && o.status === 'apartado' ? '<p class="small" style="margin:0">Confirma el pedido para poder entregarlo al transportista.</p>' : ''}
-    ${isProducer && d.status === 'asignada' && o.status !== 'apartado' ? `<form id="handoff" class="stack"><label for="hcode">Código que te dice el transportista</label>
-      <input id="hcode" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.4rem;letter-spacing:.3em;text-align:center;font-weight:800">
-      <button class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg> Entregar al transportista</button></form>` : ''}
-    ${isBuyer && ['abierta', 'asignada'].includes(d.status) ? '<button class="btn ghost sm" id="cancelTruck">Cancelar flete (lo recojo yo)</button>' : ''}
-    ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> al transportista.</p>' : ''}
+    <div class="row between"><strong>${I('truck')} Entrega a domicilio</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
+    <div class="small">A ${e(d.address)}${d.needs_cold ? ` · ${I('snow')} refrigerado` : ''}</div>
+    ${c ? `<div class="small">${I('user')} ${e(c.name)} · ${e(c.vehicle || '')}</div>
+      ${isBuyer && d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}">${I('chat')} WhatsApp a quien lo lleva</a>` : ''}` : ''}
+    ${canAssign ? (drivers.length ? `<form id="assign" class="stack">
+        <label for="carrier_id">${d.status === 'abierta' ? '¿Quién lo lleva?' : 'Cambiar transportista'}</label>
+        <select id="carrier_id" name="carrier_id">${drivers.map((x) => `<option value="${x.id}" ${c && c.id === x.id ? 'selected' : ''}>${e(x.name)} · ${e(x.vehicle || '')}${x.capacity_kg ? ` · ${x.capacity_kg} kg` : ''}${x.active_trips ? ` · ${x.active_trips} pendientes` : ''}</option>`).join('')}</select>
+        <button class="btn">${I('truck')} ${d.status === 'abierta' ? 'Asignar entrega' : 'Reasignar'}</button>
+      </form>
+      ${o.status === 'apartado' ? '<p class="small muted" style="margin:0">Confirma el pedido para que tu transportista pueda cargarlo.</p>' : ''}`
+      : `<p class="small" style="margin:0">Aún no tienes transportistas. <a href="#/productor/equipo">Agrega a tu personal</a> o cancela la entrega para que lo recojan.</p>`) : ''}
+    ${(isBuyer || isProducer) && ['abierta', 'asignada'].includes(d.status) ? `<button class="btn ghost sm" id="cancelTruck">${isBuyer ? 'Cancelar entrega (lo recojo yo)' : 'No puedo entregarlo; que lo recojan'}</button>` : ''}
+    ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> a quien lo lleva.</p>' : ''}
   </div>`;
 }

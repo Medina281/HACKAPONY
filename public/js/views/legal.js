@@ -25,15 +25,15 @@ export default async function legal({ app, opts }) {
       <h3>¿Qué datos pedimos?</h3>
       <ul>
         <li><strong>Obligatorios:</strong> nombre, teléfono (WhatsApp), municipio y contraseña (se guarda cifrada con <em>scrypt</em>; nadie puede leerla).</li>
-        <li><strong>Opcionales:</strong> correo electrónico, nombre del negocio, punto de recolección, dirección de entrega de un flete, datos del vehículo (transportistas) y fotos de productos.</li>
+        <li><strong>Opcionales:</strong> correo electrónico, nombre del negocio, punto de recolección, dirección de entrega a domicilio, datos del vehículo (transportistas del productor) y fotos de productos.</li>
         <li><strong>No pedimos datos sensibles</strong> (salud, origen étnico, creencias, preferencias, datos bancarios). El correo y el teléfono son datos personales, no sensibles; aun así los protegemos y el correo es opcional.</li>
       </ul>
       <h3>¿Para qué los usamos?</h3>
-      <ul><li>Crear tu cuenta, publicar y apartar productos, coordinar recolecciones y fletes, avisarte de tus pedidos y atender reportes.</li><li>No vendemos ni compartimos tus datos con fines publicitarios.</li></ul>
+      <ul><li>Crear tu cuenta, publicar y apartar productos, coordinar recolecciones y entregas, avisarte de tus pedidos y atender reportes.</li><li>No vendemos ni compartimos tus datos con fines publicitarios.</li></ul>
       <h3>¿Quién ve qué?</h3>
       <ul>
         <li>En el tablero sólo se ve el <strong>municipio</strong>, nunca tu ubicación exacta.</li>
-        <li>Tu teléfono y punto exacto sólo los ve quien tiene un pedido o flete contigo.</li>
+        <li>Tu teléfono y punto exacto sólo los ve quien tiene un pedido o una entrega contigo.</li>
         <li>Los comercios registrados pueden ver el WhatsApp del productor para preguntar disponibilidad.</li>
         <li>La administración ve los datos necesarios para moderar y atender reportes.</li>
       </ul>

@@ -4,79 +4,85 @@ import { startApp, client, user, JITOMATE } from './helpers.js';
 import { parseMulti } from '../public/js/shared/parse.js';
 import { parseSniimHtml, pickPrice, sniimUrl } from '../src/services/market.js';
 
-let app, prod, buyer, carrier, carrier2;
+let app, prod, prod2, buyer, carrier, carrier2;
 before(async () => {
   app = await startApp();
   prod = await user(app.base, 'productor');
+  prod2 = await user(app.base, 'productor');
   buyer = await user(app.base, 'comprador');
-  carrier = await user(app.base, 'transportista', { vehicle: 'Camioneta', capacity_kg: 1500 });
-  carrier2 = await user(app.base, 'transportista', { vehicle: 'Pickup', capacity_kg: 1000 });
+  // El productor da de alta a su propio transportista
+  const r = await prod.post('/api/producer/drivers', { name: 'Chofer Uno', phone: '4437770001', password: 'secreta123', vehicle: 'Camioneta', capacity_kg: 1500 });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  carrier = client(app.base);
+  await carrier.post('/api/auth/login', { identifier: '4437770001', password: 'secreta123' });
+  carrier.id = r.body.id;
+  const r2 = await prod2.post('/api/producer/drivers', { name: 'Chofer Otro', phone: '4437770002', password: 'secreta123', vehicle: 'Pickup', capacity_kg: 500 });
+  carrier2 = client(app.base);
+  await carrier2.post('/api/auth/login', { identifier: '4437770002', password: 'secreta123' });
+  carrier2.id = r2.body.id;
 });
 after(() => app.close());
 
-async function orderWithFreight(kg = 20, extra = {}) {
-  const { body: { lot } } = await prod.post('/api/lots', JITOMATE);
+const DELIVERS = { ...JITOMATE, producer_transport: true };
+async function orderWithDelivery(kg = 20, extra = {}) {
+  const { body: { lot } } = await prod.post('/api/lots', DELIVERS);
   const { body: o } = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg });
-  const r = await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle Falsa 123, Centro', fee: 300, ...extra });
+  const r = await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle Falsa 123, Centro', ...extra });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   return { folio: o.folio, code: o.order.delivery_code, id: r.body.delivery.id, lot };
 }
 
-describe('Transportista y fletes', () => {
-  test('registro de transportista exige capacidad', async () => {
-    const r = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Sin carga', phone: '4438887777', password: 'secreta123', municipality: 'morelia' });
+describe('Transportista del productor', () => {
+  test('nadie se registra solo como transportista; lo da de alta su productor', async () => {
+    const r = await client(app.base).post('/api/auth/register', { role: 'transportista', name: 'Libre', phone: '4438887777', password: 'secreta123', municipality: 'morelia', capacity_kg: 900 });
     assert.equal(r.status, 400);
-    assert.ok(r.body.fields.capacity_kg);
+    assert.ok(r.body.fields.role);
+    const me = (await carrier.get('/api/carrier/summary')).body;
+    assert.ok(me.employer, 'sabe para qué productor trabaja');
+    assert.equal((await buyer.post('/api/producer/drivers', { name: 'X', phone: '4437770009', password: 'secreta123', capacity_kg: 100 })).status, 403);
   });
 
-  test('flujo completo: pedir flete → tomar → recoger con código → entregar con código', async () => {
-    const f = await orderWithFreight();
-    // Antes de tomarlo, el transportista no ve contactos
-    const open = (await carrier.get('/api/deliveries')).body.deliveries.find((d) => d.id === f.id);
-    assert.ok(open);
-    assert.equal(open.buyer, undefined, 'sin datos de contacto antes de aceptar');
-    const acc = await carrier.post(`/api/deliveries/${f.id}/accept`);
-    assert.equal(acc.body.delivery.status, 'asignada');
-    assert.ok(acc.body.delivery.buyer.address, 'al aceptar ve la dirección');
-    const pickup = acc.body.delivery.pickup_code;
-    // El productor no puede entregar sin confirmar el pedido
-    assert.equal((await prod.post(`/api/deliveries/${f.id}/handoff`, { code: pickup })).status, 409);
+  test('flujo: comercio pide entrega → productor asigna a SU transportista → carga → entrega con código', async () => {
+    const f = await orderWithDelivery();
+    assert.equal((await carrier.get('/api/deliveries')).body.deliveries.some((d) => d.id === f.id), false, 'no ve entregas sin asignar');
+    // No puede asignarla a un transportista de otro productor
+    assert.equal((await prod.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier2.id })).status, 400);
+    // Otro productor no puede asignar
+    assert.equal((await prod2.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier2.id })).status, 403);
+    const a = await prod.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier.id });
+    assert.equal(a.body.delivery.status, 'asignada');
+    const mine = (await carrier.get('/api/deliveries')).body.deliveries.find((d) => d.id === f.id);
+    assert.ok(mine.buyer.address, 've la dirección de entrega');
+    assert.equal((await carrier2.get(`/api/deliveries/${f.id}`)).status, 403, 'otro transportista no la ve');
+    // No puede cargar hasta que el productor confirme
+    assert.equal((await carrier.post(`/api/deliveries/${f.id}/pickup`)).status, 409);
     await prod.post(`/api/orders/${f.folio}/confirmar`);
-    // El productor ya no puede "entregar" directo: lo lleva el transportista
-    assert.equal((await prod.post(`/api/orders/${f.folio}/entregar`, { code: f.code })).status, 409);
-    assert.equal((await prod.post(`/api/deliveries/${f.id}/handoff`, { code: '000000' })).status, 400);
-    assert.equal((await prod.post(`/api/deliveries/${f.id}/handoff`, { code: pickup })).body.delivery.status, 'recogida');
-    // El comprador ya no puede cancelar con el producto en camino
-    assert.equal((await buyer.post(`/api/orders/${f.folio}/cancelar`, { reason: 'x' })).status, 409);
+    assert.equal((await prod.post(`/api/orders/${f.folio}/entregar`, { code: f.code })).status, 409, 'lo entrega su transportista');
+    assert.equal((await carrier.post(`/api/deliveries/${f.id}/pickup`)).body.delivery.status, 'recogida');
+    assert.equal((await buyer.post(`/api/orders/${f.folio}/cancelar`, { reason: 'x' })).status, 409, 'ya va en camino');
     assert.equal((await carrier.post(`/api/deliveries/${f.id}/deliver`, { code: '111111' })).status, 400);
     const done = await carrier.post(`/api/deliveries/${f.id}/deliver`, { code: f.code });
     assert.equal(done.body.delivery.status, 'entregada');
     assert.equal((await buyer.get(`/api/orders/${f.folio}`)).body.order.status, 'recolectado');
     const s = (await carrier.get('/api/carrier/summary')).body.summary;
     assert.equal(s.delivered, 1);
-    assert.equal(s.earnings_c, 30000);
   });
 
-  test('dos transportistas no pueden tomar el mismo flete', async () => {
-    const f = await orderWithFreight();
-    const [a, b] = await Promise.all([carrier.post(`/api/deliveries/${f.id}/accept`), carrier2.post(`/api/deliveries/${f.id}/accept`)]);
-    assert.deepEqual([a.status, b.status].sort(), [200, 409]);
-  });
-
-  test('permisos: sólo el comprador pide flete; otros no ven fletes ajenos; capacidad y frío se respetan', async () => {
-    const { body: { lot } } = await prod.post('/api/lots', JITOMATE);
+  test('sólo se pide entrega si el productor la ofrece; capacidad del vehículo se respeta', async () => {
+    const { body: { lot } } = await prod.post('/api/lots', JITOMATE); // sin entrega a domicilio
     const { body: o } = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10 });
-    assert.equal((await prod.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2', fee: 100 })).status, 403);
-    const other = await user(app.base, 'comprador');
-    assert.equal((await other.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2', fee: 100 })).status, 403);
-    const cold = await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2', fee: 100, needs_cold: true });
-    assert.equal((await carrier.post(`/api/deliveries/${cold.body.delivery.id}/accept`)).status, 409, 'sin refrigeración');
-    assert.equal((await other.get(`/api/deliveries/${cold.body.delivery.id}`)).status, 403);
-    assert.equal((await buyer.get('/api/deliveries')).status, 403, 'sólo transportistas ven el tablero de viajes');
+    assert.equal((await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2' })).status, 409);
+    assert.equal((await prod.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2' })).status, 403);
+    const big = await prod2.post('/api/lots', { ...DELIVERS, kg: 900 });
+    const { body: o2 } = await buyer.post(`/api/lots/${big.body.lot.id}/reserve`, { kg: 800 });
+    const d = await buyer.post('/api/deliveries', { folio: o2.folio, address: 'Calle 1 #2' });
+    assert.equal((await prod2.post(`/api/deliveries/${d.body.delivery.id}/assign`, { carrier_id: carrier2.id })).status, 400, 'supera 500 kg');
   });
 
-  test('cancelar el pedido cancela el flete pendiente', async () => {
-    const f = await orderWithFreight();
+  test('dar de baja a un transportista con entregas en curso no se permite; cancelar pedido cancela la entrega', async () => {
+    const f = await orderWithDelivery(5);
+    await prod.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier.id });
+    assert.equal((await prod.patch(`/api/producer/drivers/${carrier.id}`, { active: false })).status, 409);
     await buyer.post(`/api/orders/${f.folio}/cancelar`, { reason: 'Ya no lo necesito' });
     assert.equal((await buyer.get(`/api/orders/${f.folio}`)).body.order.delivery.status, 'cancelada');
   });

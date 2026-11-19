@@ -130,7 +130,7 @@ export const waLink = (phone, text) =>
   `https://wa.me/${phone ? '52' + String(phone).replace(/\D/g, '').slice(-10) : ''}?text=${encodeURIComponent(text)}`;
 export const shareText = (l) =>
   `Oferta en Raíz Directa: ${formatKg(l.available_g)} de ${l.product} a ${formatMXN(l.rescue_price_c)}/kg ` +
-  `(${l.discount}% menos que su precio habitual declarado). Zona: ${l.municipality_name}. ${location.origin}/#/oferta/${l.id}`;
+  `(${l.discount}% menos que el precio del productor). Zona: ${l.municipality_name}. ${location.origin}/#/oferta/${l.id}`;
 
 export function fieldErrors(form, fields = {}) {
   for (const el of $$('.field', form)) el.classList.remove('invalid');

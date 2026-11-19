@@ -3,7 +3,8 @@ import { onLeave } from '../app.js';
 import { $, $$, e, mxn, toast, fieldErrors, waLink, shareText, muniOptions } from '../ui.js';
 import { PRODUCTS, QUALITY, CATEGORIES, normalize, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, discountPct, kgToGrams, pesosToCents } from '../shared/calc.js';
-import { parseSpoken, parseMulti } from '../shared/parse.js';
+import { priceFor, TIERS } from '../shared/pricing.js';
+import { parseSpoken, parseMulti, asOwnPrice } from '../shared/parse.js';
 import { takePhoto, standardizeFile, canUseCamera } from '../camera.js';
 import { estimateShelfLife, CLASS_LABEL } from '../shared/shelf.js';
 import { getForecast, manualForecast, MANUAL_CLIMATES, WEATHER_CREDIT } from '../weather.js';
@@ -12,7 +13,7 @@ import { canRecognize } from '../voice/speech.js';
 import { lotCard } from './components.js';
 
 const DRAFT = 'rd_draft';
-const QUICK = ['Jitomate', 'Aguacate', 'Fresa', 'Guayaba', 'Limón', 'Mango', 'Calabacita', 'Cebolla', 'Papa', 'Plátano'];
+const QUICK = ['Jitomate', 'Aguacate', 'Fresa', 'Zarzamora', 'Guayaba', 'Limón', 'Mango', 'Tomate verde', 'Calabacita', 'Cebolla', 'Papa', 'Chile', 'Plátano', 'Durazno'];
 
 export default async function publish({ app, query, state }) {
   const user = state.user;
@@ -31,7 +32,7 @@ export default async function publish({ app, query, state }) {
     initial = {
       ...initial, product: lot.product, category: lot.category, quality: lot.quality, kg: lot.total_g / 1000,
       min_kg: lot.min_g / 1000, allow_partial: lot.allow_partial, ref_price: lot.ref_price_c / 100,
-      rescue_price: lot.original_rescue_price_c / 100, hours: lot.fresh_hours, pickup_point: lot.pickup_point || '',
+      hours: lot.fresh_hours, pickup_point: lot.pickup_point || '',
       pickup_window: lot.pickup_window || '', producer_transport: lot.producer_transport, notes: lot.notes || '', municipality: lot.municipality,
     };
     source = `Copiamos los datos de tu publicación anterior de ${e(lot.product)}. Revisa kilos, precio y horas.`;
@@ -48,7 +49,7 @@ export default async function publish({ app, query, state }) {
   <div class="wrap page">
     <div class="layout-2">
       <form id="pf" class="stack" novalidate>
-        <div><h1 style="margin:0">Publicar producto</h1><p class="muted">5 datos y listo. Lo demás es opcional.</p></div>
+        <div><h1 style="margin:0">Publicar producto</h1><p class="muted">Producto, kilos, tu precio, estado y horas. La app pone el precio de rescate.</p></div>
         ${source ? `<div class="notice info">${source} <button type="button" class="btn ghost sm" id="discard">Empezar de cero</button></div>` : ''}
 
         <div class="card quick">
@@ -65,8 +66,7 @@ export default async function publish({ app, query, state }) {
             <p class="phrase" aria-label="Frase para completar">
               Tengo <input class="blank n" data-s="kg" inputmode="decimal" placeholder="100" aria-label="Kilos"> kilos de
               <span class="cur"><input class="blank w" data-s="product" list="plist" placeholder="jitomate" aria-label="Producto">,</span>
-              lo doy a <span class="cur">$<input class="blank n" data-s="rescue_price" inputmode="decimal" placeholder="12" aria-label="Precio de rescate"></span> el kilo
-              <span class="soft">(normalmente a <span class="cur">$<input class="blank n" data-s="ref_price" inputmode="decimal" placeholder="25" aria-label="Precio de siempre"></span>)</span>
+              lo vendo a <span class="cur">$<input class="blank n" data-s="ref_price" inputmode="decimal" placeholder="25" aria-label="Tu precio por kilo"></span> el kilo
               y me quedan <input class="blank n" data-s="hours" inputmode="decimal" placeholder="24" aria-label="Horas"> horas.
             </p>
             <p class="tiny muted" style="margin:0">Lo que escribas aquí llena el formulario de abajo al instante.</p>
@@ -100,24 +100,18 @@ export default async function publish({ app, query, state }) {
             <div class="input-unit"><input id="kg" name="kg" inputmode="decimal" value="${v('kg')}" placeholder="100"><span>kg</span></div>
             <div class="err" data-for="kg"></div>
           </div>
-          <div class="two">
-            <div class="field"><label for="ref_price">3. Precio de siempre</label>
-              <div class="input-unit"><input id="ref_price" name="ref_price" inputmode="decimal" value="${v('ref_price')}" placeholder="25"><span>$/kg</span></div>
-              <div class="hint">Al que normalmente lo vendes.</div><div class="err" data-for="ref_price"></div>
-              <div class="sniim" id="sniimBox" aria-live="polite"></div>
-            </div>
-            <div class="field"><label for="rescue_price">4. Precio de rescate</label>
-              <div class="input-unit"><input id="rescue_price" name="rescue_price" inputmode="decimal" value="${v('rescue_price')}" placeholder="12"><span>$/kg</span></div>
-              <div class="chips" id="disc">${[30, 40, 50].map((d) => `<button type="button" class="chip" data-d="${d}">−${d}%</button>`).join('')}</div>
-              <div class="err" data-for="rescue_price"></div>
-            </div>
+          <div class="field"><label for="ref_price">3. ¿A cuánto vendes el kilo?</label>
+            <div class="input-unit"><input id="ref_price" name="ref_price" inputmode="decimal" value="${v('ref_price')}" placeholder="25"><span>$/kg</span></div>
+            <div class="hint">Tu precio normal. El precio de rescate lo pone la app sola y baja conforme pasan las horas.</div><div class="err" data-for="ref_price"></div>
+            <input type="hidden" name="rescue_price" id="rescue_price">
+            <div class="sniim" id="sniimBox" aria-live="polite"></div>
           </div>
           <div class="field"><label>¿Cómo está el producto?</label>
             <div class="stack" id="quality">${QUALITY.map((q) => `<label class="inline-check"><input type="radio" name="quality" value="${q.id}" ${initial.quality === q.id ? 'checked' : ''}><span>${e(q.label)}<br><span class="tiny muted">${e(q.hint)}</span></span></label>`).join('')}</div>
             <div class="notice danger small" style="margin-top:8px">Si está podrido, golpeado con daño o no apto para consumo, <strong>no se publica</strong> para venta como alimento.</div>
             <div class="err" data-for="quality"></div>
           </div>
-          <div class="field"><label for="hours">5. ¿Cuántas horas le quedan para venderse fresco?</label>
+          <div class="field"><label for="hours">4. ¿Cuántas horas le quedan para venderse fresco?</label>
             <div class="shelf" id="shelfBox" aria-live="polite"></div>
             <div class="chips" id="hrs">${[6, 12, 24, 48, 72].map((h) => `<button type="button" class="chip" data-h="${h}">${h < 48 ? `${h} h` : `${h / 24} días`}</button>`).join('')}</div>
             <div class="input-unit"><input id="hours" name="hours" inputmode="decimal" value="${v('hours')}" placeholder="24"><span>horas</span></div>
@@ -135,7 +129,7 @@ export default async function publish({ app, query, state }) {
           <div class="field"><label class="inline-check"><input type="checkbox" name="allow_partial" ${initial.allow_partial !== false ? 'checked' : ''}><span>Acepto vender por partes (no sólo el lote completo)</span></label></div>
           <div class="field"><label for="pickup_point">Punto de recolección</label><input id="pickup_point" name="pickup_point" value="${v('pickup_point')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Sólo lo verá quien aparte.</div></div>
           <div class="field"><label for="pickup_window">Horario para recoger</label><input id="pickup_window" name="pickup_window" value="${v('pickup_window')}" placeholder="Ej. 7:00 a 13:00"></div>
-          <div class="field"><label class="inline-check"><input type="checkbox" name="producer_transport" ${initial.producer_transport ? 'checked' : ''}><span>Puedo llevarlo (con costo a acordar)</span></label></div>
+          <div class="field"><label class="inline-check"><input type="checkbox" name="producer_transport" ${initial.producer_transport ? 'checked' : ''}><span>Entrego a domicilio con mi transporte (el costo lo acuerdo con el comercio)</span></label></div>
           <div class="field"><label for="notes">Comentarios</label><textarea id="notes" name="notes" maxlength="400" placeholder="Ej. Ideal para salsa o aguas frescas">${v('notes')}</textarea></div>
         </details>
 
@@ -213,16 +207,19 @@ export default async function publish({ app, query, state }) {
     localStorage.setItem(DRAFT, JSON.stringify({ ...d, declaration: false }));
     const g = kgToGrams(d.kg || 0);
     const ref = pesosToCents(d.ref_price || 0);
-    const res = pesosToCents(d.rescue_price || 0);
-    const ok = g > 0 && ref > 0 && res > 0 && res < ref;
+    const res = ref > 0 ? priceFor(ref, TIERS[0].off) : 0;
+    f.rescue_price.value = res ? res / 100 : '';
+    const ok = g > 0 && ref >= 100;
     const t = orderTotals(g, ref, res);
-    $('#calc').innerHTML = `<h3>Tu lote</h3>${ok ? `<dl>
-      <dt>Valor a precio de siempre</dt><dd>${mxn(t.refTotal)}</dd>
-      <dt>Valor de rescate</dt><dd>${mxn(t.rescueTotal)}</dd>
-      <dt>Descuento para el comprador</dt><dd>${discountPct(ref, res)}%</dd>
-      <dt class="total">Puedes recuperar hasta</dt><dd class="total">${mxn(t.rescueTotal)}</dd></dl>
-      <p class="tiny" style="margin:8px 0 0;opacity:.85">Si no lo vendes, se pierde todo. Con el rescate recuperas ${t.refTotal ? Math.round((t.rescueTotal / t.refTotal) * 100) : 0}% de su valor habitual.</p>`
-      : `<p style="margin:0;opacity:.9">${res >= ref && res > 0 ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> El precio de rescate debe ser menor al de siempre.' : 'Llena kilos y precios para ver cuánto puedes recuperar.'}</p>`}`;
+    const last = ref > 0 ? priceFor(ref, TIERS[TIERS.length - 1].off) : 0;
+    const hrs = Number(d.hours) || 0;
+    const fmtH = (x) => (x >= 24 && x % 24 === 0 ? `${x / 24} d` : `${Math.round(x * 10) / 10} h`);
+    $('#calc').innerHTML = `<h3>Precio automático</h3>${ok ? `
+      <div class="tiers">${TIERS.map((tr, i) => `<div class="tier"><span>${hrs ? `${fmtH(i ? TIERS[i - 1].until * hrs : 0)}–${fmtH(tr.until * hrs)}` : `${i ? Math.round(TIERS[i - 1].until * 100) : 0}–${Math.round(tr.until * 100)}% del tiempo`}</span><b>${mxn(priceFor(ref, tr.off))}</b><small>−${tr.off}%</small></div>`).join('')}</div>
+      <dl><dt>Tu lote a tu precio</dt><dd>${mxn(t.refTotal)}</dd>
+      <dt class="total">Recuperas</dt><dd class="total">${mxn(orderTotals(g, ref, last).rescueTotal)} a ${mxn(t.rescueTotal)}</dd></dl>
+      <p class="tiny" style="margin:8px 0 0;opacity:.85">Entre más pronto se aparte, más recuperas. El precio baja solo; no tienes que hacer nada.</p>`
+      : '<p style="margin:0;opacity:.9">Escribe kilos y tu precio para ver cómo se venderá.</p>'}`;
     const hours = Number(d.hours) || 24;
     $('#preview').innerHTML = lotCard({
       id: 0, product: d.product || 'Tu producto', photo, state: hours <= 6 ? 'por_vencer' : 'disponible', discount: ok ? discountPct(ref, res) : 0,
@@ -248,17 +245,17 @@ export default async function publish({ app, query, state }) {
   function summaryHtml(d) {
     const g = kgToGrams(d.kg || 0);
     const ref = pesosToCents(d.ref_price || 0);
-    const res = pesosToCents(d.rescue_price || 0);
+    const res = ref > 0 ? priceFor(ref, TIERS[0].off) : 0;
     const t = orderTotals(g, ref, res);
     const muni = municipality(d.municipality);
     return `<dl class="kv small" style="margin:8px 0">
       <dt>Producto</dt><dd>${e(d.product)}</dd>
       <dt>Cantidad</dt><dd>${e(d.kg)} kg${d.min_kg ? ` · mínimo ${e(d.min_kg)} kg` : ''}</dd>
-      <dt>Precio</dt><dd>$${e(d.rescue_price)}/kg <s class="muted">$${e(d.ref_price)} habitual</s> · −${discountPct(ref, res)}%</dd>
+      <dt>Precio</dt><dd>Tu precio $${e(d.ref_price)}/kg · en la app empieza en <b>${mxn(res)}</b> (−${discountPct(ref, res)}%) y baja solo hasta ${mxn(priceFor(ref, TIERS[TIERS.length - 1].off))}</dd>
       <dt>Frescura</dt><dd>${e(d.hours)} h${shelf ? ` <span class="muted">(estimado por clima ~${shelf.hours} h)</span>` : ''}</dd>
       <dt>Estado</dt><dd>${e(qualityLabel(d.quality) || 'Sin indicar')}</dd>
       <dt>Zona</dt><dd>${e(muni?.name || '')}${d.producer_transport ? ' · puedes llevarlo' : ''}</dd>
-      <dt>Ingresos potenciales</dt><dd><strong>${mxn(t.rescueTotal)}</strong> <span class="muted">(valor habitual ${mxn(t.refTotal)}; ahorro para compradores ${mxn(t.savings)})</span></dd>
+      <dt>Recuperas</dt><dd>hasta <strong>${mxn(t.rescueTotal)}</strong> <span class="muted">si se aparta pronto (a tu precio valdría ${mxn(t.refTotal)})</span></dd>
     </dl>`;
   }
 
@@ -387,11 +384,6 @@ export default async function publish({ app, query, state }) {
     if (b.dataset.h) set('hours', b.dataset.h);
     if ('useshelf' in b.dataset && shelf) set('hours', shelf.hours);
     if (b.dataset.clima) forecast = manualForecast(Number(b.dataset.clima));
-    if (b.dataset.d) {
-      const ref = Number(String(f.ref_price.value).replace(',', '.'));
-      if (!ref) return toast('Primero escribe tu precio de siempre', 'error');
-      set('rescue_price', Math.round(ref * (1 - b.dataset.d / 100) * 2) / 2);
-    }
     if (b.dataset.tpl) {
       const t = templates.find((x) => String(x.id) === b.dataset.tpl);
       Object.entries(t.payload).forEach(([k, val]) => set(k, val));
@@ -418,13 +410,13 @@ export default async function publish({ app, query, state }) {
     const text = $('#speech').value.trim();
     if (!text) return toast('Pega primero tu mensaje', 'error');
     if (parseMulti(text).length > 1) return assistant.open({ text }); // varios productos → se arman en el asistente
-    const r = parseSpoken(text);
-    for (const k of ['product', 'kg', 'rescue_price', 'ref_price', 'hours', 'quality', 'min_kg', 'municipality']) if (r[k] != null) set(k, r[k]);
+    const r = asOwnPrice(parseSpoken(text));
+    for (const k of ['product', 'kg', 'ref_price', 'hours', 'quality', 'min_kg', 'municipality']) if (r[k] != null) set(k, r[k]);
     if (r.product) autoCategory();
     if (r.producer_transport) set('producer_transport', true);
     method = 'frase';
     update();
-    const names = { product: 'producto', kg: 'kilos', rescue_price: 'precio de rescate', ref_price: 'precio de siempre', hours: 'horas', quality: 'estado del producto', pack_kg: 'kilos por caja' };
+    const names = { product: 'producto', kg: 'kilos', ref_price: 'tu precio por kilo', hours: 'horas', quality: 'estado del producto', pack_kg: 'kilos por caja' };
     if (r.unsafe) toast('Un producto podrido o no apto no se puede publicar como alimento', 'error');
     else toast(r.missing.length ? `Completa: ${r.missing.map((m) => names[m]).join(', ')}` : 'Listo. Revisa los datos y publica.', r.missing.length ? '' : 'ok');
   });

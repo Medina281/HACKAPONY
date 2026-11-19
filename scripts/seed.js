@@ -38,10 +38,11 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   addUser('mercadito', { role: 'comprador', name: 'Luis Cárdenas', business: 'Frutería El Mercadito', type: 'fruteria', phone: '4430000102', muni: 'morelia' });
   addUser('juguera', { role: 'comprador', name: 'Ana Villaseñor', business: 'Juguería La Huerta', type: 'jugueria', phone: '4430000103', muni: 'tarimbaro' });
   addUser('comedor', { role: 'comprador', name: 'Martín Ochoa', business: 'Comedor Los Arcos', type: 'comedor', phone: '4430000104', muni: 'morelia' });
-  addUser('fletes1', { role: 'transportista', name: 'Raúl Pérez', phone: '4430000201', email: 'transportista@demo.mx', muni: 'morelia' });
-  addUser('fletes2', { role: 'transportista', name: 'Sofía Guzmán', phone: '4430000202', muni: 'tarimbaro' });
-  db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, radius_km=60 WHERE phone='4430000201'").run();
-  db.prepare("UPDATE users SET vehicle='Camioneta refrigerada', capacity_kg=800, refrigerated=1, radius_km=80 WHERE phone='4430000202'").run();
+  // Transportistas: personal de cada productor (los da de alta el propio productor)
+  addUser('fletes1', { role: 'transportista', name: 'Raúl Pérez', phone: '4430000201', email: 'transportista@demo.mx', muni: 'tarimbaro' });
+  addUser('fletes2', { role: 'transportista', name: 'Sofía Guzmán', phone: '4430000202', muni: 'uruapan' });
+  db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, employer_id=? WHERE phone='4430000201'").run(users.ramiro.id);
+  db.prepare("UPDATE users SET vehicle='Camioneta refrigerada', capacity_kg=800, refrigerated=1, employer_id=? WHERE phone='4430000202'").run(users.encinos.id);
   for (const k of ['fletes1', 'fletes2']) users[k] = db.prepare('SELECT * FROM users WHERE id = ?').get(users[k].id);
   addUser('admin', { role: 'admin', name: 'Administración Raíz Directa', phone: '4430000999', email: 'admin@demo.mx', muni: 'morelia' });
 
@@ -71,19 +72,18 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   const d1 = now - 26 * H;
   const old3 = lot('cuitzeo', d1, { product: 'Calabacita', category: 'verdura', quality: 'imperfeccion', kg: 35, ref_price: 18, rescue_price: 10, hours: 20, min_kg: 3 });
   deliver(order('lupe', old3, 15, d1 + H), 'cuitzeo', d1 + 2 * H);
-  const old4 = lot('encinos', d1, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, ref_price: 48, rescue_price: 30, hours: 22, min_kg: 5 });
+  const old4 = lot('encinos', d1, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, ref_price: 48, rescue_price: 30, hours: 22, min_kg: 5, producer_transport: true });
   deliver(order('mercadito', old4, 40, d1 + H), 'encinos', d1 + 3 * H);
-  // Flete histórico: aguacate de Uruapan llevado a Morelia por el transportista demo
+  // Entrega histórica: la huerta llevó aguacate a Morelia con su propia transportista
   const fol = order('lupe', old4, 20, d1 + 1.5 * H, 5);
   const oid = db.prepare('SELECT id FROM orders WHERE folio = ?').get(fol).id;
-  const did = requestDelivery(db, d1 + 1.6 * H, users.lupe, { folio: fol, address: 'Av. Madero Poniente 1200, Centro (ficticio)', fee: 450, to_muni: 'morelia' });
+  const did = requestDelivery(db, d1 + 1.6 * H, users.lupe, { folio: fol, address: 'Av. Madero Poniente 1200, Centro (ficticio)', to_muni: 'morelia' });
   db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(did);
-  actOnDelivery(db, d1 + 1.7 * H, users.fletes1, did, 'accept');
-  transition(db, d1 + 1.8 * H, users.encinos, fol, 'confirmar');
-  const pc = db.prepare('SELECT pickup_code FROM deliveries WHERE id = ?').get(did).pickup_code;
-  actOnDelivery(db, d1 + 2.5 * H, users.encinos, did, 'handoff', { code: pc });
+  transition(db, d1 + 1.7 * H, users.encinos, fol, 'confirmar');
+  actOnDelivery(db, d1 + 1.8 * H, users.encinos, did, 'assign', { carrier_id: users.fletes2.id });
+  actOnDelivery(db, d1 + 2.5 * H, users.fletes2, did, 'pickup');
   const dc = db.prepare('SELECT delivery_code FROM orders WHERE id = ?').get(oid).delivery_code;
-  actOnDelivery(db, d1 + 4.5 * H, users.fletes1, did, 'deliver', { code: dc });
+  actOnDelivery(db, d1 + 4.5 * H, users.fletes2, did, 'deliver', { code: dc });
 
   // Lote que venció sin venderse por completo (merma visible en el dashboard)
   lot('zina', now - 30 * H, { product: 'Guayaba', category: 'fruta', quality: 'proximo', kg: 30, ref_price: 20, rescue_price: 10, hours: 26 });
@@ -105,8 +105,13 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   // Pedido activo para el comprador demo
   const papa = db.prepare("SELECT id FROM lots WHERE product='Papa' AND expires_at > ?").get(now).id;
   const papaFolio = order('lupe', papa, 30, t + 2 * 60e3, 4);
-  const openDid = requestDelivery(db, t + 3 * 60e3, users.lupe, { folio: papaFolio, address: 'Calle Allende 345, Centro, Morelia (ficticio)', fee: 380, to_muni: 'morelia', notes: 'Entregar por la puerta lateral' });
+  // Entrega en curso del productor demo: el comercio la pidió, Ramiro confirmó y se la asignó a Raúl
+  const zan = lot('ramiro', t, { product: 'Zanahoria', category: 'verdura', quality: 'imperfeccion', kg: 80, min_kg: 5, ref_price: 14, rescue_price: 8, hours: 72, producer_transport: true, notes: 'Forma irregular; entrego en Morelia con mi camioneta.' });
+  const zanFolio = order('lupe', zan, 25, t + 2 * 60e3, 4);
+  const openDid = requestDelivery(db, t + 3 * 60e3, users.lupe, { folio: zanFolio, address: 'Calle Allende 345, Centro, Morelia (ficticio)', to_muni: 'morelia', notes: 'Entregar por la puerta lateral' });
   db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(openDid);
+  transition(db, t + 4 * 60e3, users.ramiro, zanFolio, 'confirmar');
+  actOnDelivery(db, t + 5 * 60e3, users.ramiro, openDid, 'assign', { carrier_id: users.fletes1.id });
   // Pedido pendiente de confirmar para un productor (panel con algo que atender)
   const guay = db.prepare("SELECT id FROM lots WHERE product='Guayaba' AND expires_at > ?").get(now).id;
   order('juguera', guay, 15, t + 3 * 60e3, 3);

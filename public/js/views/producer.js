@@ -4,7 +4,8 @@ import { e, mxn, kg, statePill, timer, empty, media } from '../ui.js';
 const lifeUsed = (l) => Math.min(100, Math.max(0, Math.round(((Date.now() - l.created_at) / (l.expires_at - l.created_at)) * 100)));
 
 export default async function producer({ app, state }) {
-  const [{ summary: s, lots }, { orders }] = await Promise.all([api('/api/producer/summary'), api('/api/orders?as=productor')]);
+  const [{ summary: s, lots }, { orders }, { deliveries }] = await Promise.all([api('/api/producer/summary'), api('/api/orders?as=productor'), api('/api/deliveries')]);
+  const toAssign = deliveries.filter((d) => d.status === 'abierta').length;
   const toConfirm = orders.filter((o) => o.status === 'apartado').length;
   const toDeliver = orders.filter((o) => ['confirmado', 'listo'].includes(o.status)).length;
   const active = lots.filter((l) => ['disponible', 'por_vencer', 'pausado'].includes(l.state));
@@ -31,6 +32,7 @@ export default async function producer({ app, state }) {
       <a class="big-action primary" href="#/publicar"><span class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg></span><span><strong>Publicar producto</strong>Menos de un minuto</span></a>
       <a class="big-action" href="#/productor/pedidos?tab=nuevos"><span class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#inbox"/></svg></span><span><strong>Revisar pedidos</strong>Apartados por confirmar</span>${toConfirm ? `<span class="count">${toConfirm}</span>` : ''}</a>
       <a class="big-action" href="#/productor/pedidos?tab=entregar"><span class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#box-check"/></svg></span><span><strong>Confirmar recolecciones</strong>Con el código del comprador</span>${toDeliver ? `<span class="count">${toDeliver}</span>` : ''}</a>
+      <a class="big-action" href="#/productor/equipo"><span class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg></span><span><strong>Mi transporte</strong>Entregas a domicilio y tu personal</span>${toAssign ? `<span class="count">${toAssign}</span>` : ''}</a>
     </div>
     <div class="kpis">
       <div class="kpi main"><b>${mxn(s.income_c)}</b><span>ingresos recuperados (entregas confirmadas)</span></div>

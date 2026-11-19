@@ -19,11 +19,17 @@ export const CLASS_LABEL = {
   extrema: 'Perecibilidad extremadamente alta',
 };
 
-// Fuente: clasificación por respiración (Kader). guayaba no aparece → supuesto "moderada".
+// Fuente: clasificación por respiración (Kader). Los que no aparecen (guayaba, nopal, chayote…) → supuesto "moderada".
 const CLASS_BY_PRODUCT = {
   jitomate: 'moderada', aguacate: 'alta', fresa: 'alta', guayaba: 'moderada*', limon: 'baja', mango: 'moderada',
   calabacita: 'moderada', cebolla: 'baja', papa: 'baja', platano: 'moderada', chile: 'moderada', zanahoria: 'moderada',
   elote: 'extrema', brocoli: 'muy_alta', lechuga: 'moderada', naranja: 'baja',
+  // Catálogo ampliado (misma clasificación por tasa de respiración, Kader)
+  manzana: 'baja', pera: 'moderada', durazno: 'moderada', uva: 'baja', toronja: 'baja', mandarina: 'baja',
+  papaya: 'baja', pina: 'baja', sandia: 'baja', melon: 'moderada', arandano: 'moderada', zarzamora: 'alta', frambuesa: 'alta',
+  pepino: 'moderada', col: 'moderada', rabano: 'moderada', coliflor: 'alta', ejote: 'muy_alta', espinaca: 'extrema',
+  champinon: 'extrema', camote: 'baja', betabel: 'baja', apio: 'baja', ajo: 'baja',
+  // Sin clasificación en la fuente → supuesto "moderada*": tomate verde, chayote, nopal, pimiento, cilantro, acelga, jícama, tuna
 };
 
 // Horas de referencia a 20 °C, producto en buen estado (SUPUESTO calibrable).

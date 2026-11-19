@@ -60,12 +60,25 @@ Además: reservas parciales con transacciones (sin sobreventa), ciclo de pedido 
 
 | Rol | Funciones únicas |
 |---|---|
-| **Productor** | Publicar por voz/cámara/frase, varios productos en un dictado, sugerencia de precio, vida útil por clima, precio SNIIM, confirmar pedidos y entregar con código (al comercio o al transportista). |
-| **Comercio** | Tablero con filtros, comparación con precio SNIIM, apartado parcial, calculadora de traslado, **pedir transportista** (ofrece el pago), código de entrega. |
-| **Transportista** | Tablero de fletes cercanos que caben en su vehículo (capacidad, refrigeración, radio), tomar viaje con un toque (sin carreras: sólo uno lo gana), ruta en mapa, código de recolección para el productor, captura del código del comercio, ganancias. |
-| **Administración** | Reportes con acciones (pausar oferta, suspender productor) y aviso al que reportó, ofertas, pedidos, fletes, usuarios, caché de precios SNIIM. |
+| **Productor** | Publicar por voz/cámara/frase con sólo 5 datos (producto, kilos, **su precio**, estado y horas), varios productos en un dictado, vida útil por clima, precio SNIIM, confirmar pedidos, **dar de alta a su propio transportista** y asignarle las entregas a domicilio. |
+| **Comercio** | Tablero con filtros, comparación con precio SNIIM, apartado parcial, calculadora de traslado, **pedir entrega a domicilio** cuando el productor la ofrece, código de entrega. |
+| **Transportista** | Es **personal del productor** (lo registra el productor, no se registra solo). Ve sólo las entregas que su productor le asigna: a quién, dirección, ruta en mapa, “ya cargué” y captura del código del comercio al entregar. |
+| **Administración** | Reportes con acciones (pausar oferta, suspender productor) y aviso al que reportó, ofertas, pedidos, entregas, usuarios, caché de precios SNIIM. |
 
-Raíz Directa conecta con transportistas independientes; no presta el servicio de transporte.
+El transporte es del propio productor: Raíz Directa no ofrece fletes de terceros ni cobra envíos.
+
+## Precio automático (regla "tramos-v1")
+
+El agricultor sólo dice **su precio por kilo** y **cuántas horas de frescura** tiene el producto. La app pone el precio de rescate y lo baja sola conforme pasan esas horas:
+
+| Tiempo transcurrido de la frescura | Descuento sobre el precio del productor |
+|---|---|
+| 0–25 % | −20 % |
+| 25–50 % | −30 % |
+| 50–75 % | −40 % |
+| 75–100 % | −50 % |
+
+Redondeo a 50 centavos. El pedido conserva el precio vigente al momento de apartar. Los porcentajes son una **regla de la plataforma (decisión del equipo, ajustable en `public/js/shared/pricing.js`)**, no un dato de mercado.
 
 ## Precios reales del SNIIM
 

@@ -30,7 +30,6 @@ export default async function landing({ app, state }) {
       <div class="role-cards">
         <a class="role-card" href="#/registro?rol=productor"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></div><strong>Vendo</strong><span class="small muted">Publica por voz o con foto. Recupera lo que ibas a perder.</span></a>
         <a class="role-card" href="#/ofertas"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg></div><strong>Compro</strong><span class="small muted">Fondas, fruterías y comedores: aparta con descuento.</span></a>
-        <a class="role-card" href="#/registro?rol=transportista"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg></div><strong>Transporto</strong><span class="small muted">Toma fletes cortos en tu zona y cobra directo.</span></a>
       </div>`}
     </div>
   </section>
@@ -61,7 +60,7 @@ export default async function landing({ app, state }) {
     <div class="split how">
       <div class="card"><h3>Publica</h3><p class="muted small">Dicta “100 kilos de jitomate a 12 y 50 de cebolla a 8”, toma una foto y confirma.</p></div>
       <div class="card"><h3>Aparta</h3><p class="muted small">Ves temporizador, ahorro, precio SNIIM y distancia. Apartas sólo lo que necesitas.</p></div>
-      <div class="card"><h3>Recoge o te lo llevan</h3><p class="muted small">Pasas tú o un transportista de la zona. La entrega se confirma con un código.</p></div>
+      <div class="card"><h3>Recoge o te lo llevan</h3><p class="muted small">Pasas tú o el productor te lo lleva con su propio transporte. La entrega se confirma con un código.</p></div>
     </div>
   </div></section>
 

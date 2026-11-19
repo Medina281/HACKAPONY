@@ -31,7 +31,7 @@ describe('1-2. Publicación express', () => {
     assert.equal(lot.total_g, 100000);
     assert.equal(lot.available_g, 100000);
     assert.equal(lot.ref_price_c, 2500);
-    assert.equal(lot.rescue_price_c, 1200);
+    assert.equal(lot.rescue_price_c, 2000, 'precio de rescate automático: −20% al publicar');
     assert.equal(lot.expires_at, app.clock.t + 24 * 3600e3);
     assert.equal(lot.state, 'disponible');
   });
@@ -40,8 +40,7 @@ describe('1-2. Publicación express', () => {
     const cases = [
       [{ kg: -5 }, 'kg'],
       [{ kg: 0 }, 'kg'],
-      [{ rescue_price: 30 }, 'rescue_price'], // rescate mayor que habitual
-      [{ rescue_price: 25 }, 'rescue_price'], // igual al habitual
+      [{ ref_price: 0 }, 'ref_price'],
       [{ ref_price: 'abc' }, 'ref_price'],
       [{ hours: 0 }, 'hours'],
       [{ hours: 500 }, 'hours'],
@@ -84,8 +83,8 @@ describe('4-6. Reservas e inventario', () => {
     assert.equal(r1.status, 201, JSON.stringify(r1.body));
     assert.match(r1.body.folio, /^RD-\d{4}$/);
     assert.equal(r1.body.order.total_ref_c, 50000);
-    assert.equal(r1.body.order.total_rescue_c, 24000);
-    assert.equal(r1.body.order.savings_c, 26000);
+    assert.equal(r1.body.order.total_rescue_c, 40000); // 20 kg × $20 (−20%)
+    assert.equal(r1.body.order.savings_c, 10000);
     assert.equal(r1.body.order.status, 'apartado');
     assert.match(r1.body.order.delivery_code, /^\d{6}$/);
     assert.equal(await available(lot.id), 80000);
@@ -178,10 +177,26 @@ describe('9-10. Entrega e impacto', () => {
 
     s = (await client(app.base).get('/api/stats')).body.stats;
     assert.equal(s.collected_g - before.collected_g, 20000);
-    assert.equal(s.producer_income_c - before.producer_income_c, 24000);
-    assert.equal(s.buyer_savings_c - before.buyer_savings_c, 26000);
+    assert.equal(s.producer_income_c - before.producer_income_c, 40000);
+    assert.equal(s.buyer_savings_c - before.buyer_savings_c, 10000);
     assert.equal(s.completed_orders - before.completed_orders, 1);
     assert.equal((await buyer.post(`/api/orders/${folio}/cancelar`, { reason: 'x' })).status, 409, 'no se cancela lo entregado');
+  });
+});
+
+describe('Precio automático por tramos', () => {
+  test('baja solo conforme pasan las horas de frescura y el pedido usa el precio vigente', async () => {
+    const lot = await publish(); // $25/kg, 24 h
+    assert.deepEqual(lot.price_schedule.map((t) => t.cents), [2000, 1750, 1500, 1250]);
+    app.advance(7); // 29% de la vida útil → tramo 2 (−30%)
+    assert.equal((await client(app.base).get(`/api/lots/${lot.id}`)).body.lot.rescue_price_c, 1750);
+    const r = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10 });
+    assert.equal(r.body.order.unit_rescue_c, 1750);
+    app.advance(12); // 79% → −50%
+    assert.equal((await client(app.base).get(`/api/lots/${lot.id}`)).body.lot.rescue_price_c, 1250);
+    // El productor corrige su precio y el de rescate se recalcula
+    await prod.patch(`/api/lots/${lot.id}/price`, { ref_price: 30 });
+    assert.equal((await client(app.base).get(`/api/lots/${lot.id}`)).body.lot.rescue_price_c, 1500);
   });
 });
 
@@ -194,7 +209,7 @@ describe('11. Permisos en servidor', () => {
     assert.equal((await buyer.post('/api/lots', JITOMATE)).status, 403, 'comprador no publica');
     assert.equal((await anon.post(`/api/lots/${lot.id}/reserve`, { kg: 5 })).status, 401);
     assert.equal((await prod.post(`/api/lots/${lot.id}/reserve`, { kg: 5 })).status, 403, 'productor no aparta');
-    assert.equal((await otherProd.patch(`/api/lots/${lot.id}/price`, { rescue_price: 5 })).status, 403, 'precio ajeno');
+    assert.equal((await otherProd.patch(`/api/lots/${lot.id}/price`, { ref_price: 5 })).status, 403, 'precio ajeno');
     assert.equal((await otherProd.post(`/api/lots/${lot.id}/status`, { status: 'retirado' })).status, 403);
     const { body } = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 5 });
     assert.equal((await otherProd.post(`/api/orders/${body.folio}/confirmar`)).status, 403, 'pedido ajeno');

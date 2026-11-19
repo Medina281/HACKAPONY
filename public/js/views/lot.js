@@ -28,7 +28,9 @@ export default async function lotView({ app, params, state }) {
           <div class="lot-media detail-media">${media(l.photo, l.product)}${statePill(l.state)}<span class="disc">−${Math.round(l.discount)}%</span></div>
           <div class="lot-body">
             <div class="price-tab"><span class="muted small">Precio de rescate</span><div class="price">${mxn(l.rescue_price_c)}<small>/kg</small></div>
-              <span class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'precio SNIIM' : 'habitual declarado*'}</span></div>
+              <span class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'precio SNIIM' : 'precio del productor'}</span></div>
+            ${l.price_schedule ? `<div class="stack" style="gap:6px"><div class="small">${l.next_price_at ? `Precio automático: baja a <b>${mxn(l.next_price_c)}</b> en ${timer(l.next_price_at)}` : 'Precio automático: ya está en su precio más bajo.'}</div>
+              <div class="price-steps">${l.price_schedule.map((t) => `<div class="${t.cents === l.rescue_price_c && Date.now() >= t.from - 60e3 && Date.now() < t.to ? 'now' : ''}"><b>${mxn(t.cents)}</b>−${t.off}%</div>`).join('')}</div></div>` : ''}
             ${l.is_demo ? '<span class="pill demo">dato de demostración</span>' : ''}
             <div class="row"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> Frescura comercial estimada:</span> ${timer(l.expires_at)}</div>
             <div id="mkt" class="sniim"></div>
@@ -126,8 +128,8 @@ export default async function lotView({ app, params, state }) {
     const g = kgToGrams(kgInput.value || 0);
     const t = orderTotals(g, l.ref_price_c, l.rescue_price_c);
     $('#calc').innerHTML = `<h3>Tu ahorro</h3><dl>
-      <dt>Precio habitual (${kg(g)} × ${mxn(l.ref_price_c)})</dt><dd>${mxn(t.refTotal)}</dd>
-      <dt>Precio de rescate (${kg(g)} × ${mxn(l.rescue_price_c)})</dt><dd>${mxn(t.rescueTotal)}</dd>
+      <dt>A precio del productor (${kg(g)} × ${mxn(l.ref_price_c)})</dt><dd>${mxn(t.refTotal)}</dd>
+      <dt>Precio de rescate de ahora (${kg(g)} × ${mxn(l.rescue_price_c)})</dt><dd>${mxn(t.rescueTotal)}</dd>
       <dt>Descuento</dt><dd>${discountPct(l.ref_price_c, l.rescue_price_c)}%</dd>
       <dt class="total">Ahorro bruto</dt><dd class="total">${mxn(t.savings)}</dd>
       <dt>Pagas al recoger</dt><dd>${mxn(t.rescueTotal)}</dd></dl>`;
@@ -207,21 +209,15 @@ async function ownerPanel(side, l, app, state) {
   const mine = orders.filter((o) => o.lot_id === l.id);
   const alive = ['disponible', 'por_vencer', 'agotado'].includes(l.state);
   side.innerHTML = `
-    ${l.suggestion ? `<div class="card stack" style="border-color:var(--terra)">
-      <h3><svg class="i" aria-hidden="true"><use href="/icons.svg#bulb"/></svg> Sugerencia de precio</h3>
-      <p class="small">${e(l.suggestion.reason)} Bajar a <strong>${mxn(l.suggestion.price_c)}/kg</strong> (${l.suggestion.discount}% de descuento) podría ayudar a moverlo.</p>
-      <p class="tiny muted">Regla simple basada en tiempo transcurrido y kilos sin apartar. Tú decides; nada cambia sin tu autorización.</p>
-      <button class="btn terra" id="apply">Aplicar ${mxn(l.suggestion.price_c)}/kg</button>
-    </div>` : ''}
     <div class="card stack">
       <h3>Pedidos de esta oferta (${mine.length})</h3>
       ${mine.length ? mine.map((o) => `<a href="#/pedido/${o.folio}" class="row between" style="text-decoration:none;color:inherit;border-top:1px solid var(--line);padding-top:8px"><span><strong>${e(o.folio)}</strong> · ${kg(o.qty_g)} · ${e(o.buyer.name)}</span>${orderPill(o.status)}</a>`).join('') : '<p class="muted small">Aún no hay apartados.</p>'}
     </div>
     ${alive ? `<form class="card stack" id="pricef" novalidate>
-      <h3>Cambiar precio de rescate</h3>
-      <div class="field"><div class="input-unit"><input name="rescue_price" inputmode="decimal" value="${l.rescue_price_c / 100}"><span>$/kg</span></div><div class="err" data-for="rescue_price"></div></div>
+      <h3>Corregir tu precio por kilo</h3>
+      <div class="field"><div class="input-unit"><input name="ref_price" inputmode="decimal" value="${l.ref_price_c / 100}"><span>$/kg</span></div><div class="err" data-for="ref_price"></div></div>
       <button class="btn secondary">Guardar precio</button>
-      <p class="tiny muted">Los pedidos ya apartados conservan su precio.</p>
+      <p class="tiny muted">El precio de rescate se recalcula solo con la regla automática. Los pedidos ya apartados conservan su precio.</p>
     </form>
     <form class="card stack" id="reducef" novalidate>
       <h3>¿Vendiste parte por otro lado?</h3>
@@ -238,15 +234,10 @@ async function ownerPanel(side, l, app, state) {
       <p class="tiny muted">Retirar no cancela pedidos ya apartados.</p>
     </div>`;
   const reload = () => lotView({ app, params: { id: l.id }, state });
-  $('#apply')?.addEventListener('click', async () => {
-    await api(`/api/lots/${l.id}/price`, { method: 'PATCH', body: { rescue_price: l.suggestion.price_c / 100, reason: 'sugerencia_aceptada' } });
-    toast('Precio actualizado', 'ok');
-    reload();
-  });
   $('#pricef')?.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     try {
-      await api(`/api/lots/${l.id}/price`, { method: 'PATCH', body: { rescue_price: ev.target.rescue_price.value } });
+      await api(`/api/lots/${l.id}/price`, { method: 'PATCH', body: { ref_price: ev.target.ref_price.value } });
       toast('Precio actualizado', 'ok');
       reload();
     } catch (err) {

@@ -120,6 +120,12 @@ export function parseSpoken(input, { context } = {}) {
     // Primer "N kilos" que no sea parte de "mínimo N kilos" ni de un precio "a N el kilo"
     const k = kgM.find((m) => !/(minimo|minima|desde)\s*(de\s*)?$/.test(t.slice(Math.max(0, m.index - 12), m.index)));
     if (k) r.kg = toNum(k[1]);
+    // "100 de durazno", "30 de chile poblano": número seguido del producto, sin decir "kilos"
+    if (r.kg == null) {
+      const names = PRODUCTS.flatMap((p) => [p.name, ...p.alias]).map((n) => normalize(n)).sort((a, b) => b.length - a.length).join('|');
+      const m = t.match(new RegExp(`(?<!\\ba\\s)(?<!\\$)\\b${NUM}\\s+de\\s+(?:${names})\\b`));
+      if (m) r.kg = toNum(m[1]);
+    }
   }
   const minM = t.match(new RegExp(`(?:minimo|minima|desde)\\s*(?:de\\s*)?${NUM}\\s*kilos?`));
   if (minM) r.min_kg = toNum(minM[1]);
@@ -297,4 +303,20 @@ export function parseMulti(input) {
     r.missing = r.missing.filter((k) => r[k] == null);
   }
   return results;
+}
+
+/**
+ * El agricultor sólo dice SU precio; el de rescate lo pone la app.
+ * Si dijo un solo precio ("lo doy a 25") ése es su precio. Si dijo dos ("a 12, normalmente 25") se toma el normal.
+ */
+export function asOwnPrice(r) {
+  if (!r) return r;
+  if (r.ref_price == null && r.rescue_price != null) r.ref_price = r.rescue_price;
+  r.rescue_price = null;
+  if (r.pending_prices?.length) {
+    const own = r.pending_prices.find((p) => p.field === 'ref_price') || r.pending_prices[0];
+    r.pending_prices = [{ ...own, field: 'ref_price' }];
+  }
+  if (r.missing) r.missing = r.missing.filter((m) => m !== 'rescue_price' && !(m === 'ref_price' && r.ref_price != null));
+  return r;
 }

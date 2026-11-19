@@ -25,11 +25,11 @@ export function lotCard(l, { owner = false } = {}) {
       <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
       <div class="lot-foot">
         <div><div class="price">${mxn(l.rescue_price_c)}<small>/kg</small></div>
-          <div class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'} · ${kg(l.available_g)} libres</div></div>
+          <div class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'SNIIM' : 'precio productor'} · ${kg(l.available_g)} libres</div></div>
         ${action}
       </div>
     </div>
   </article>`;
 }
 
-export const refNote = `<p class="tiny muted">* Precio habitual declarado por el productor como referencia; no proviene de una fuente de mercado verificada. Distancias en línea recta entre cabeceras municipales; por carretera suelen ser ~${Math.round((ROAD_FACTOR - 1) * 100)}% mayores o más.</p>`;
+export const refNote = `<p class="tiny muted">Precio del productor: lo declara él; el precio de rescate lo pone la app y baja solo por tramos (−20% al publicar, hasta −50% al final de las horas de frescura). Distancias en línea recta entre cabeceras municipales; por carretera suelen ser ~${Math.round((ROAD_FACTOR - 1) * 100)}% mayores o más.</p>`;

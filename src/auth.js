@@ -70,7 +70,7 @@ export function publicUser(u) {
   return {
     id: u.id, role: u.role, name: u.name, business_name: u.business_name, business_type: u.business_type,
     email: u.email, phone: u.phone, municipality: u.municipality, pickup_point: u.pickup_point,
-    ...(u.role === 'transportista' ? { vehicle: u.vehicle, capacity_kg: u.capacity_kg, refrigerated: !!u.refrigerated, radius_km: u.radius_km, available: !!u.available } : {}),
+    ...(u.role === 'transportista' ? { vehicle: u.vehicle, capacity_kg: u.capacity_kg, refrigerated: !!u.refrigerated, employer_id: u.employer_id } : {}),
   };
 }
 

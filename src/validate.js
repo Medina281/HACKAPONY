@@ -1,3 +1,4 @@
+import { priceFor, TIERS } from '../public/js/shared/pricing.js';
 import { bad } from './http.js';
 import { CATEGORIES, MUNICIPALITIES, QUALITY } from '../public/js/shared/catalog.js';
 import { kgToGrams, pesosToCents } from '../public/js/shared/calc.js';
@@ -15,11 +16,8 @@ export function validateLot(b) {
   else if (kg > 50000) e.kg = 'Máximo 50,000 kg por lote';
 
   const ref = num(b.ref_price);
-  const rescue = num(b.rescue_price);
-  if (!Number.isFinite(ref) || ref <= 0) e.ref_price = 'Indica tu precio habitual por kg';
+  if (!Number.isFinite(ref) || ref < 1) e.ref_price = 'Indica tu precio por kilo (mínimo $1)';
   else if (ref > 2000) e.ref_price = 'Precio fuera de rango (máx. $2,000/kg)';
-  if (!Number.isFinite(rescue) || rescue <= 0) e.rescue_price = 'Indica el precio de rescate por kg';
-  else if (Number.isFinite(ref) && rescue >= ref) e.rescue_price = 'El precio de rescate debe ser menor al habitual';
 
   const hours = num(b.hours);
   if (!Number.isFinite(hours) || hours <= 0) e.hours = 'Indica cuántas horas le quedan de frescura';
@@ -55,7 +53,8 @@ export function validateLot(b) {
     min_g: allow_partial ? (minKg ? kgToGrams(minKg) : Math.min(1000, total_g)) : total_g,
     allow_partial,
     ref_price_c: pesosToCents(ref),
-    rescue_price_c: pesosToCents(rescue),
+    // Precio de rescate automático: primer tramo de la regla de la plataforma (luego baja solo con el tiempo).
+    rescue_price_c: priceFor(pesosToCents(ref), TIERS[0].off),
     fresh_hours: Math.round(hours * 2) / 2,
     municipality,
     pickup_point: str(b.pickup_point, 160) || null,

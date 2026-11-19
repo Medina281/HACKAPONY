@@ -6,6 +6,10 @@ import { HttpError, bad } from '../http.js';
 import { validateLot, num } from '../validate.js';
 import { discountPct, haversineKm, pesosToCents, kgToGrams } from '../../public/js/shared/calc.js';
 import { municipality, normalize } from '../../public/js/shared/catalog.js';
+import { priceAt, schedule, PRICE_RULE } from '../../public/js/shared/pricing.js';
+
+/** Precio de rescate vigente (baja solo por tramos conforme pasan las horas de frescura). */
+export const currentPrice = (l, now) => priceAt(l.ref_price_c, l.created_at, l.expires_at, now);
 
 export const URGENT_MS = 6 * 3600e3; // "próximo a vencer": menos de 6 horas
 const CLOSED_VISIBLE_MS = 24 * 3600e3; // agotados/vencidos se muestran 24 h más como referencia
@@ -19,27 +23,14 @@ export function lotState(l, now) {
   return 'disponible';
 }
 
-/** Sugerencia de rebaja por reglas simples. El productor decide si la aplica. */
-export function priceSuggestion(l, now) {
-  const state = lotState(l, now);
-  if (!['disponible', 'por_vencer'].includes(state)) return null;
-  const windowMs = l.fresh_hours * 3600e3;
-  const elapsed = 1 - (l.expires_at - now) / windowMs;
-  const unsold = l.available_g / l.total_g;
-  if (elapsed < 0.5 || unsold < 0.5) return null;
-  const d = discountPct(l.ref_price_c, l.rescue_price_c);
-  if (d >= 70) return null;
-  const target = Math.max(Math.round((l.rescue_price_c * 0.85) / 50) * 50, Math.round(l.ref_price_c * 0.3));
-  if (target >= l.rescue_price_c) return null;
-  return {
-    price_c: target,
-    discount: discountPct(l.ref_price_c, target),
-    reason: `Ya pasó ${Math.round(elapsed * 100)}% del tiempo y queda ${Math.round(unsold * 100)}% sin apartar.`,
-  };
+/** Ya no hace falta sugerir rebajas: el precio baja solo con la regla automática. */
+export function priceSuggestion() {
+  return null;
 }
 
 export function serializeLot(l, now, { viewer, from } = {}) {
   const muni = municipality(l.municipality);
+  const cp = currentPrice(l, now);
   const isOwner = viewer && (viewer.id === l.producer_id || viewer.role === 'admin');
   const out = {
     id: l.id,
@@ -51,8 +42,12 @@ export function serializeLot(l, now, { viewer, from } = {}) {
     min_g: l.min_g,
     allow_partial: !!l.allow_partial,
     ref_price_c: l.ref_price_c,
-    rescue_price_c: l.rescue_price_c,
-    discount: discountPct(l.ref_price_c, l.rescue_price_c),
+    rescue_price_c: cp.cents,
+    discount: discountPct(l.ref_price_c, cp.cents),
+    price_rule: PRICE_RULE,
+    next_price_at: cp.next_at,
+    next_price_c: cp.next_cents,
+    price_schedule: schedule(l.ref_price_c, l.created_at, l.expires_at),
     fresh_hours: l.fresh_hours,
     expires_at: l.expires_at,
     created_at: l.created_at,
@@ -103,7 +98,7 @@ export function listFeed(db, now, q, viewer) {
   if (q.municipality) where.push('l.municipality = ?'), params.push(q.municipality);
   if (q.quality) where.push('l.quality = ?'), params.push(q.quality);
   const maxPrice = num(q.max_price);
-  if (Number.isFinite(maxPrice) && maxPrice > 0) where.push('l.rescue_price_c <= ?'), params.push(pesosToCents(maxPrice));
+
   const rows = db.prepare(`${LOT_SELECT} WHERE ${where.join(' AND ')} ORDER BY l.expires_at ASC LIMIT 200`).all(...params);
 
   const from = municipality(q.from) || null;
@@ -112,6 +107,7 @@ export function listFeed(db, now, q, viewer) {
   const radius = num(q.radius);
   if (from && Number.isFinite(radius) && radius > 0) list = list.filter((l) => l.distance_km <= radius);
   if (q.urgent === '1') list = list.filter((l) => l.state === 'por_vencer');
+  if (Number.isFinite(maxPrice) && maxPrice > 0) list = list.filter((l) => l.rescue_price_c <= pesosToCents(maxPrice));
 
   const open = (l) => (['disponible', 'por_vencer'].includes(l.state) ? 0 : 1);
   const sorters = {
@@ -198,17 +194,17 @@ function ownLot(db, user, id) {
   return l;
 }
 
+/** El productor corrige SU precio por kilo; el de rescate se recalcula solo. */
 export function updatePrice(db, now, user, id, body) {
   const l = ownLot(db, user, id);
-  const p = num(body.rescue_price);
-  if (!Number.isFinite(p) || p <= 0) throw bad('Precio no válido', { rescue_price: 'Precio no válido' });
+  const p = num(body.ref_price ?? body.price);
+  if (!Number.isFinite(p) || p <= 0 || p > 2000) throw bad('Precio no válido', { ref_price: 'Precio no válido' });
   const c = pesosToCents(p);
-  if (c >= l.ref_price_c) throw bad('Debe ser menor al precio habitual', { rescue_price: 'Debe ser menor al habitual' });
   if (lotState(l, now) === 'vencido') throw new HttpError(409, 'La oferta ya venció');
   tx(db, () => {
-    db.prepare('UPDATE lots SET rescue_price_c = ? WHERE id = ?').run(c, id);
+    db.prepare(`UPDATE lots SET ref_price_c = ?, rescue_price_c = ?, ref_source = 'declarado' WHERE id = ?`).run(c, priceAt(c, l.created_at, l.expires_at, l.created_at).cents, id);
     db.prepare('INSERT INTO price_history (lot_id, old_c, new_c, actor_id, reason, created_at) VALUES (?,?,?,?,?,?)').run(
-      id, l.rescue_price_c, c, user.id, body.reason || 'ajuste_manual', now,
+      id, l.ref_price_c, c, user.id, body.reason || 'ajuste_precio_productor', now,
     );
   });
 }

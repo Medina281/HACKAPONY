@@ -231,6 +231,45 @@ const MIGRATIONS = [
   ALTER TABLE lots ADD COLUMN ref_source TEXT NOT NULL DEFAULT 'declarado' CHECK (ref_source IN ('declarado','sniim'));
   ALTER TABLE lots ADD COLUMN ref_market_json TEXT;
   `,
+  // v5: el transportista trabaja para un productor (no es un servicio independiente) y la entrega no lleva tarifa en la app
+  {
+    fkOff: true,
+    sql: `
+  ALTER TABLE users ADD COLUMN employer_id INTEGER REFERENCES users(id);
+  CREATE TABLE deliveries_new (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL UNIQUE REFERENCES orders(id),
+    buyer_id INTEGER NOT NULL REFERENCES users(id),
+    producer_id INTEGER NOT NULL REFERENCES users(id),
+    carrier_id INTEGER REFERENCES users(id),
+    from_muni TEXT NOT NULL,
+    to_muni TEXT NOT NULL,
+    address TEXT NOT NULL,
+    distance_km REAL NOT NULL,
+    weight_g INTEGER NOT NULL,
+    fee_c INTEGER NOT NULL DEFAULT 0 CHECK (fee_c >= 0),
+    needs_cold INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    pickup_code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'abierta' CHECK (status IN ('abierta','asignada','recogida','entregada','cancelada')),
+    cancel_reason TEXT,
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    assigned_at INTEGER,
+    picked_at INTEGER,
+    delivered_at INTEGER
+  );
+  INSERT INTO deliveries_new SELECT id, order_id, buyer_id, producer_id, carrier_id, from_muni, to_muni, address, distance_km, weight_g, 0, needs_cold, notes,
+    pickup_code, status, cancel_reason, is_demo, created_at, assigned_at, picked_at, delivered_at FROM deliveries;
+  DROP TABLE deliveries;
+  ALTER TABLE deliveries_new RENAME TO deliveries;
+  CREATE INDEX idx_deliv_status ON deliveries(producer_id, status);
+  CREATE INDEX idx_deliv_carrier ON deliveries(carrier_id, status);
+  CREATE INDEX idx_users_employer ON users(employer_id);
+  UPDATE users SET employer_id = (SELECT id FROM users WHERE phone = '4430000001' AND is_demo = 1) WHERE phone = '4430000201' AND is_demo = 1;
+  UPDATE users SET employer_id = (SELECT id FROM users WHERE phone = '4430000002' AND is_demo = 1) WHERE phone = '4430000202' AND is_demo = 1;
+  `,
+  },
 ];
 
 export function openDb(file) {

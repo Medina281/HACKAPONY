@@ -50,7 +50,8 @@ describe('Asistente de voz: intérprete', () => {
     assert.equal(parseSpoken('veinticinco pesos', { context: 'ref_price' }).ref_price, 25);
     assert.equal(parseSpoken('veinticinco pesos', { context: 'ref_price' }).rescue_price, null);
     assert.equal(parseSpoken('dos días', { context: 'hours' }).hours, 48);
-    assert.equal(parseSpoken('nopales', { context: 'product' }).product, 'Nopales');
+    assert.equal(parseSpoken('nopales', { context: 'product' }).product, 'Nopal', 'ya está en el catálogo');
+    assert.equal(parseSpoken('pitayas', { context: 'product' }).product, 'Pitayas', 'fuera del catálogo se respeta lo dicho');
   });
 
   test('detecta producto no apto', () => {

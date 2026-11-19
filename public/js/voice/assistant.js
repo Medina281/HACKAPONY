@@ -3,7 +3,8 @@
 // · Lo que falte se pide en UNA sola tarjeta por producto (menos preguntas, menos tiempo).
 // · No inventa datos y nunca publica sin confirmación explícita.
 import { $, e, toast, mxn, stripIcons } from '../ui.js';
-import { parseMulti, parseSpoken, resolvePacks, VAGUE_LABEL } from '../shared/parse.js';
+import { parseMulti, parseSpoken, resolvePacks, VAGUE_LABEL, asOwnPrice } from '../shared/parse.js';
+import { priceFor, TIERS } from '../shared/pricing.js';
 import { QUALITY, PRODUCTS, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, kgToGrams, pesosToCents, discountPct } from '../shared/calc.js';
 import { createRecognizer, canRecognize, brokenRecognizer, isAndroid, canSpeak, speak, stopSpeaking, ERROR_TEXT } from './speech.js';
@@ -11,7 +12,7 @@ import { createRecognizer, canRecognize, brokenRecognizer, isAndroid, canSpeak, 
 const QUICK = ['Jitomate', 'Aguacate', 'Fresa', 'Guayaba', 'Limón', 'Mango', 'Cebolla', 'Papa'];
 const MIC_OK = 'rd_mic_ok';
 const MUTE = 'rd_tts_mute';
-const LABEL = { product: 'Producto', kg: 'Kilos', rescue_price: 'Precio de rescate ($/kg)', ref_price: 'Precio de siempre ($/kg)', quality: 'Estado', hours: 'Horas de frescura', pack_kg: 'Kilos por empaque' };
+const LABEL = { product: 'Producto', kg: 'Kilos', rescue_price: 'Precio de rescate ($/kg)', ref_price: 'Tu precio por kilo ($)', quality: 'Estado', hours: 'Horas de frescura', pack_kg: 'Kilos por empaque' };
 const num = (x) => Number(String(x ?? '').replace(',', '.')) || 0;
 
 /** Borrador en memoria para cuando el dictado trae varios productos. */
@@ -97,14 +98,20 @@ export function mountAssistant(ctx) {
     if (dr.meta.packs && !dr.meta.pack_kg) m.push('pack_kg');
     if (!d.product) m.push('product');
     if (!num(d.kg) && !dr.meta.packs) m.push('kg');
-    if (!num(d.rescue_price) && !dr.meta.pending_prices.some((p) => p.field === 'rescue_price')) m.push('rescue_price');
     if (!num(d.ref_price) && !dr.meta.pending_prices.some((p) => p.field === 'ref_price')) m.push('ref_price');
     if (!d.quality) m.push('quality');
     if (!num(d.hours)) m.push('hours');
     return m;
   }
 
+  // El precio de rescate lo calcula la app a partir del precio del agricultor (regla automática).
+  function syncRescue(dr) {
+    const ref = Math.round(num(dr.get().ref_price) * 100);
+    dr.set('rescue_price', ref >= 100 ? priceFor(ref, TIERS[0].off) / 100 : '');
+  }
+
   function applyTo(dr, r) {
+    r = asOwnPrice(r);
     if (r.unsafe) bot('<svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> Si está podrido o no es apto para consumo, <strong>no se puede publicar</strong> como alimento.', 'Si está podrido o no es apto, no se puede publicar como alimento.');
     const set = (k, v) => v != null && dr.set(k, v);
     set('product', r.product);
@@ -124,6 +131,7 @@ export function mountAssistant(ctx) {
     set('min_kg', r.min_kg);
     if (r.producer_transport) dr.set('producer_transport', true);
     if (r.municipality) for (const x of drafts()) x.set('municipality', r.municipality);
+    syncRescue(dr);
     dr.update();
     return conv;
   }
@@ -132,8 +140,7 @@ export function mountAssistant(ctx) {
     const d = dr.get();
     const parts = [`<strong>${e(d.product || '¿producto?')}</strong>`];
     if (num(d.kg)) parts.push(`${e(d.kg)} kg`);
-    if (num(d.rescue_price)) parts.push(`$${e(d.rescue_price)}/kg`);
-    if (num(d.ref_price)) parts.push(`<s>$${e(d.ref_price)}</s>`);
+    if (num(d.ref_price)) parts.push(`tu precio $${e(d.ref_price)}/kg${num(d.rescue_price) ? ` (en la app desde $${e(d.rescue_price)})` : ''}`);
     if (num(d.hours)) parts.push(`${e(d.hours)} h`);
     if (d.quality) parts.push(e(qualityLabel(d.quality)));
     return parts.join(' · ');
@@ -183,6 +190,7 @@ export function mountAssistant(ctx) {
       if (conv.rescue_price) dr.set('rescue_price', conv.rescue_price);
       if (conv.ref_price) dr.set('ref_price', conv.ref_price);
       if (conv.rescue_price || conv.ref_price) dr.meta.pending_prices = [];
+      syncRescue(dr);
       dr.update();
       card.querySelector('[data-ok]').disabled = true;
       next();
@@ -206,16 +214,6 @@ export function mountAssistant(ctx) {
   }
 
   function next() {
-    for (const [i, dr] of drafts().entries()) {
-      const d = dr.get();
-      if (num(d.rescue_price) && num(d.ref_price) && num(d.rescue_price) >= num(d.ref_price)) {
-        st.cur = i;
-        bot(`En ${e(nameOf(dr))}, el precio de rescate ($${e(d.rescue_price)}) debe ser menor que el de siempre ($${e(d.ref_price)}).`, 'El precio de rescate debe ser menor que el de siempre.');
-        dr.set('rescue_price', '');
-        dr.update();
-        return askMissing();
-      }
-    }
     const idx = drafts().findIndex((dr) => missingOf(dr).length);
     if (idx >= 0) { st.cur = idx; return askMissing(); }
     confirmStep();
@@ -248,8 +246,7 @@ export function mountAssistant(ctx) {
       if (r.product) said.push(d.product);
       if (conv.kg) said.push(`${cur().meta.packs} ${cur().meta.pack_unit}s × ${cur().meta.pack_kg} kg = <strong>${conv.kg} kg</strong>`);
       else if (r.kg != null) said.push(`${d.kg} kg${r.approx ? ' (aprox.)' : ''}`);
-      if (conv.rescue_price || r.rescue_price != null) said.push(`rescate $${d.rescue_price}/kg${conv.rescue_price ? ' (convertido del precio por empaque)' : ''}`);
-      if (conv.ref_price || r.ref_price != null) said.push(`habitual $${d.ref_price}/kg`);
+      if (conv.ref_price || r.ref_price != null || r.rescue_price != null) said.push(`tu precio $${d.ref_price}/kg${conv.ref_price ? ' (convertido del precio por empaque)' : ''} → en la app desde $${d.rescue_price}`);
       if (r.hours != null) said.push(`${d.hours} h`);
       if (r.quality) said.push(qualityLabel(d.quality));
       if (r.municipality) said.push(`en ${municipality(r.municipality).name}`);
@@ -275,10 +272,10 @@ export function mountAssistant(ctx) {
     const muni = municipality(list[0].get().municipality);
     const b = bot(`<strong>Revisa antes de publicar${multi() ? ` (${list.length} ofertas)` : ''}:</strong>${rows}
       ${multi() && ctx.hasPhoto?.() ? `<div class="tiny muted"><svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg> Tu foto se usará para ${e(nameOf(list[0]))}.</div>` : ''}
-      ${multi() ? `<div class="small" style="margin-top:6px">Zona: ${e(muni?.name || '')} · Total que puedes recuperar: <strong>${mxn(totalRes)}</strong> <span class="muted">(valor habitual ${mxn(totalRef)})</span></div>` : ''}
+      ${multi() ? `<div class="small" style="margin-top:6px">Zona: ${e(muni?.name || '')} · Total que puedes recuperar: <strong>${mxn(totalRes)}</strong> <span class="muted">(a tu precio ${mxn(totalRef)})</span></div>` : ''}
       <label class="inline-check va-decl"><input type="checkbox" data-decl ${form.get().declaration ? 'checked' : ''}><span>Declaro que ${multi() ? 'todos son' : 'es'} <strong>aptos para consumo humano</strong> y la información es verdadera.</span></label>
       <div class="two" style="margin-top:10px"><button type="button" class="btn" data-pub><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Publicar</button><button type="button" class="btn secondary" data-fix><svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> Corregir</button></div>`,
-      multi() ? `Vas a publicar ${list.length} productos: ${list.map(nameOf).join(' y ')}. Revisa y confirma.` : `Vas a publicar ${list[0].get().kg} kilos de ${list[0].get().product} a ${list[0].get().rescue_price} pesos el kilo. Revisa y confirma.`);
+      multi() ? `Vas a publicar ${list.length} productos: ${list.map(nameOf).join(' y ')}. Revisa y confirma.` : `Vas a publicar ${list[0].get().kg} kilos de ${list[0].get().product} con tu precio de ${list[0].get().ref_price} pesos el kilo; en la app empieza en ${list[0].get().rescue_price} y baja solo. Revisa y confirma.`);
     $('[data-decl]', b).addEventListener('change', (ev) => form.set('declaration', ev.target.checked));
     $('[data-fix]', b).addEventListener('click', fixMenu);
     $('[data-pub]', b).addEventListener('click', async (ev) => {
@@ -457,7 +454,7 @@ export function mountAssistant(ctx) {
     if (!msgs.children.length) {
       const muni = municipality(form.get().municipality || user.municipality);
       bot(canRecognize
-        ? `Hola, ${e(user.name.split(' ')[0])}. Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 12, normalmente 25, y 50 de cebolla a 8…”</em>`
+        ? `Hola, ${e(user.name.split(' ')[0])}. Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 25 el kilo, en buen estado, aguanta un día, y 50 de cebolla a 15…”</em> El precio de rescate lo pongo yo.`
         : `Hola, ${e(user.name.split(' ')[0])}. ${brokenRecognizer ? 'Este navegador no convierte la voz en texto; para dictar ábrelo en <strong>Chrome</strong>, <strong>Edge</strong> o <strong>Safari</strong>.' : 'Este navegador no permite dictar.'} Aquí puedes <strong>escribirme</strong> como en WhatsApp, también varios productos a la vez.`,
         canRecognize ? 'Hola. Dime qué quieres vender.' : '');
       bot(`<span class="tiny muted">Zona: ${e(muni?.name || '')} (de tu perfil; puedes decir otra).</span>`);
