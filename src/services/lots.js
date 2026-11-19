@@ -69,6 +69,8 @@ export function serializeLot(l, now, { viewer, from } = {}) {
     is_demo: !!l.is_demo,
   };
   if (from && muni) out.distance_km = haversineKm(from, muni);
+  // Mecanismo de contacto autorizado: sólo comercios registrados ven el WhatsApp del productor.
+  if (viewer && viewer.role === 'comprador' && l.producer_phone) out.producer.phone = l.producer_phone;
   if (isOwner) {
     out.pickup_point = l.pickup_point;
     out.suggestion = priceSuggestion(l, now);
@@ -77,7 +79,7 @@ export function serializeLot(l, now, { viewer, from } = {}) {
   return out;
 }
 
-const LOT_SELECT = `SELECT l.*, u.name AS producer_name, u.business_name AS producer_business
+const LOT_SELECT = `SELECT l.*, u.name AS producer_name, u.business_name AS producer_business, u.phone AS producer_phone
   FROM lots l JOIN users u ON u.id = l.producer_id`;
 
 export function getLotRow(db, id) {

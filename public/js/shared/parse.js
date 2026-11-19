@@ -48,13 +48,22 @@ export function parseSpoken(input) {
   // Precios: "12 pesos", "$12", "a 12 el kilo". Distingue el habitual por contexto.
   const prices = [];
   const re = new RegExp(`(?:\\$${NUM}|${NUM}\\s*(?:pesos|varos|mxn)|\\ba\\s+${NUM}\\s+(?:el|por)\\s+(?:kilo|kg))`, 'g');
-  let m;
-  while ((m = re.exec(t))) {
-    const value = toNum(m[1] || m[2] || m[3]);
-    const before = t.slice(Math.max(0, m.index - 30), m.index);
+  const taken = [];
+  const add = (value, index, end) => {
+    const before = t.slice(Math.max(0, index - 30), index);
     const isRef = /(normal|habitual|usual|regular|antes|suelo|siempre|mercado|en la central|precio de lista)/.test(before);
-    prices.push({ value, isRef });
+    prices.push({ value, isRef, index });
+    taken.push([index, end]);
+  };
+  let m;
+  while ((m = re.exec(t))) add(toNum(m[1] || m[2] || m[3]), m.index, m.index + m[0].length);
+  // "lo vendo a 25" (sin decir "pesos"): número tras "a" que no sea kilos, horas ni días.
+  const loose = new RegExp(`\\ba\\s+${NUM}\\b(?!\\s*(?:kilos?|kilogramos?|kgs?|horas?|hrs?|h\\b|dias?|toneladas?|ton|%|por ciento))`, 'g');
+  while ((m = loose.exec(t))) {
+    const end = m.index + m[0].length;
+    if (!taken.some(([a, b]) => m.index < b && end > a)) add(toNum(m[1]), m.index, m.index + m[0].length);
   }
+  prices.sort((a, b) => a.index - b.index);
   const ref = prices.find((p) => p.isRef);
   const rescue = prices.find((p) => !p.isRef);
   if (ref) out.refPrice = ref.value;

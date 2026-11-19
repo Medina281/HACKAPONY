@@ -1,0 +1,123 @@
+import { serverNow } from './api.js';
+import { formatRemaining, formatMXN, formatKg } from './shared/calc.js';
+import { productIcon, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
+
+/** Escapa texto para insertarlo en HTML (previene XSS). */
+export const e = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+export const $ = (sel, root = document) => root.querySelector(sel);
+export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+export { formatMXN as mxn, formatKg as kg };
+
+export function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  const box = $('#toasts');
+  while (box.children.length >= 2) box.firstChild.remove(); // máximo 2 avisos a la vez
+  box.append(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+export const muniOptions = (selected, { any } = {}) =>
+  (any ? `<option value="">${e(any)}</option>` : '') +
+  MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('');
+
+export function media(photo, product, cls = '') {
+  return photo
+    ? `<img src="${e(photo)}" alt="Foto de ${e(product)}" loading="lazy" decoding="async" class="${cls}">`
+    : `<span aria-hidden="true">${productIcon(product)}</span>`;
+}
+
+export const STATE_LABEL = {
+  disponible: ['Disponible', 'ok'],
+  por_vencer: ['Por vencer', 'warn'],
+  agotado: ['Agotado', 'muted'],
+  vencido: ['Vencido', 'danger'],
+  pausado: ['Pausado', 'muted'],
+  retirado: ['Retirado', 'muted'],
+};
+export const statePill = (s) => {
+  const [label, tone] = STATE_LABEL[s] || [s, 'muted'];
+  return `<span class="pill ${tone}">${e(label)}</span>`;
+};
+export const orderPill = (s) => {
+  const st = ORDER_STATUS[s] || { label: s, tone: 'muted' };
+  return `<span class="pill ${st.tone}">${e(st.label)}</span>`;
+};
+
+/** Temporizador: se calcula desde la fecha de vencimiento persistida y la hora del servidor. */
+export const timer = (expiresAt) => `<span class="timer" data-expires="${expiresAt}">--:--:--</span>`;
+
+export function tickTimers() {
+  const now = serverNow();
+  for (const el of $$('[data-expires]')) {
+    const left = Number(el.dataset.expires) - now;
+    el.textContent = formatRemaining(left);
+    el.classList.toggle('hot', left > 0 && left < 6 * 3600e3);
+    el.classList.toggle('dead', left <= 0);
+    if (left <= 0) {
+      // Una vista vieja no permite apartar: se deshabilita el botón al llegar a cero (el servidor también lo rechaza).
+      const card = el.closest('[data-lot]');
+      if (card && !card.classList.contains('closed')) {
+        card.classList.add('closed');
+        for (const b of $$('[data-needs-open]', card)) {
+          b.disabled = true;
+          b.textContent = 'Vencido';
+          b.removeAttribute('href');
+        }
+      }
+    }
+  }
+}
+
+export const fmtDate = (ms, opts = {}) =>
+  new Date(ms).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...opts });
+
+// ---- WhatsApp: enlaces wa.me con texto prellenado (no es WhatsApp Business API) ----
+export const waLink = (phone, text) =>
+  `https://wa.me/${phone ? '52' + String(phone).replace(/\D/g, '').slice(-10) : ''}?text=${encodeURIComponent(text)}`;
+export const shareText = (l) =>
+  `🌱 Oferta en Raíz Directa: ${formatKg(l.available_g)} de ${l.product} a ${formatMXN(l.rescue_price_c)}/kg ` +
+  `(${l.discount}% menos que su precio habitual declarado). Zona: ${l.municipality_name}. ${location.origin}/#/oferta/${l.id}`;
+
+export function fieldErrors(form, fields = {}) {
+  for (const el of $$('.field', form)) el.classList.remove('invalid');
+  for (const el of $$('.err[data-for]', form)) el.textContent = '';
+  let first = null;
+  for (const [k, msg] of Object.entries(fields)) {
+    const box = $(`.err[data-for="${k}"]`, form);
+    if (box) {
+      box.textContent = msg;
+      box.closest('.field')?.classList.add('invalid');
+      first = first || box.closest('.field');
+    }
+  }
+  first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+export const empty = (icon, title, text, action = '') =>
+  `<div class="empty"><div class="big" aria-hidden="true">${icon}</div><h3>${e(title)}</h3><p>${e(text)}</p>${action}</div>`;
+
+export const errorBox = (err, retry = '') =>
+  `<div class="empty"><div class="big" aria-hidden="true">⚠️</div><h3>No pudimos cargar esto</h3><p>${e(err.message)}</p>${retry}</div>`;
+
+/** Redimensiona una foto en el teléfono antes de subirla (ahorra datos móviles). */
+export function shrinkImage(file, max = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    img.src = url;
+  });
+}

@@ -1,0 +1,127 @@
+import { api } from '../api.js';
+import { afterLogin } from '../app.js';
+import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
+
+const DEMO = [
+  ['Productor (Tarímbaro)', '4430000001'],
+  ['Comprador (Fonda en Morelia)', '4430000101'],
+  ['Administrador', '4430000999'],
+];
+
+export default async function authView({ app, opts, query }) {
+  if (opts.mode === 'login') return login(app);
+  return register(app, query.rol === 'comprador' ? 'comprador' : query.rol === 'productor' ? 'productor' : null);
+}
+
+function login(app) {
+  app.innerHTML = `
+  <div class="wrap page" style="max-width:460px">
+    <h1>Entrar</h1>
+    <form id="f" class="card" novalidate>
+      <div class="field"><label for="identifier">Teléfono o correo</label>
+        <input id="identifier" name="identifier" inputmode="email" autocomplete="username" required placeholder="10 dígitos">
+      </div>
+      <div class="field"><label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="err" id="msg" role="alert"></p>
+      <button class="btn big" type="submit">Entrar</button>
+      <p class="center small" style="margin-top:12px">¿No tienes cuenta? <a href="#/registro">Regístrate gratis</a></p>
+    </form>
+    <div class="card" style="margin-top:14px">
+      <h3>Cuentas de demostración</h3>
+      <p class="small muted">Contraseña: <strong>demo1234</strong>. Datos ficticios.</p>
+      <div class="stack">${DEMO.map(([l, p]) => `<button class="btn ghost block" data-demo="${p}">${e(l)} · ${p}</button>`).join('')}</div>
+    </div>
+  </div>`;
+  const f = $('#f');
+  app.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-demo]');
+    if (!b) return;
+    f.identifier.value = b.dataset.demo;
+    f.password.value = 'demo1234';
+    f.requestSubmit();
+  });
+  f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = f.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'Entrando…';
+    try {
+      const { user } = await api('/api/auth/login', { method: 'POST', body: { identifier: f.identifier.value, password: f.password.value } });
+      toast(`Hola, ${user.name.split(' ')[0]} 👋`, 'ok');
+      afterLogin(user);
+    } catch (err) {
+      $('#msg').textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+    }
+  });
+}
+
+function register(app, role) {
+  app.innerHTML = `
+  <div class="wrap page" style="max-width:520px">
+    <h1>Crear cuenta</h1>
+    <p class="muted">Sólo lo necesario. Puedes completar tu perfil después.</p>
+    <form id="f" class="card" novalidate>
+      <div class="field"><label>¿Qué vas a hacer?</label>
+        <div class="seg" role="radiogroup">
+          <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}">🌱 Vendo producto</button>
+          <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}">🍽️ Compro para mi negocio</button>
+        </div>
+        <div class="err" data-for="role"></div>
+      </div>
+      <div class="field"><label for="name">Tu nombre</label><input id="name" name="name" autocomplete="name" required><div class="err" data-for="name"></div></div>
+      <div class="field" id="biz" ${role === 'comprador' ? '' : 'hidden'}>
+        <label for="business_name">Nombre del negocio</label><input id="business_name" name="business_name" placeholder="Ej. Fonda Doña Lupe">
+        <div class="err" data-for="business_name"></div>
+        <label for="business_type" style="margin-top:10px">Tipo de negocio</label>
+        <select id="business_type" name="business_type">
+          ${['fonda', 'restaurante', 'fruteria', 'jugueria', 'comedor', 'mercado', 'hotel', 'otro'].map((t) => `<option value="${t}">${t[0].toUpperCase() + t.slice(1).replace('fruteria', 'frutería').replace('jugueria', 'juguería')}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" id="bizp" ${role === 'productor' ? '' : 'hidden'}>
+        <label for="business_name_p">Nombre de tu huerta o negocio <span class="muted">(opcional)</span></label><input id="business_name_p" placeholder="Ej. Huerta Los Encinos">
+      </div>
+      <div class="field"><label for="phone">Teléfono (WhatsApp)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="10 dígitos" required>
+        <div class="hint">Con él entras y te contactan por WhatsApp. Sólo se comparte con quien tenga un pedido contigo.</div><div class="err" data-for="phone"></div></div>
+      <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
+      <div class="field"><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mínimo 8 caracteres.</div><div class="err" data-for="password"></div></div>
+      <div class="field"><label for="email">Correo <span class="muted">(opcional)</span></label><input id="email" name="email" type="email" autocomplete="email"><div class="err" data-for="email"></div></div>
+      <p class="tiny muted">Al registrarte aceptas que tus datos de contacto se usen sólo para coordinar pedidos. Prototipo: falta redactar el aviso de privacidad formal conforme a la LFPDPPP.</p>
+      <button class="btn big" type="submit">Crear cuenta</button>
+      <p class="center small" style="margin-top:12px">¿Ya tienes cuenta? <a href="#/entrar">Entra</a></p>
+    </form>
+  </div>`;
+  const f = $('#f');
+  let chosen = role;
+  f.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-role]');
+    if (!b) return;
+    chosen = b.dataset.role;
+    f.querySelectorAll('[data-role]').forEach((x) => x.classList.toggle('on', x === b));
+    $('#biz').hidden = chosen !== 'comprador';
+    $('#bizp').hidden = chosen !== 'productor';
+  });
+  f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const body = Object.fromEntries(new FormData(f));
+    body.role = chosen;
+    if (chosen === 'productor') {
+      body.business_name = $('#business_name_p').value;
+      delete body.business_type;
+    }
+    const btn = f.querySelector('[type=submit]');
+    btn.disabled = true;
+    try {
+      const { user } = await api('/api/auth/register', { method: 'POST', body });
+      toast('¡Cuenta creada! 🌱', 'ok');
+      afterLogin(user);
+    } catch (err) {
+      fieldErrors(f, err.fields);
+      toast(err.message, 'error');
+      btn.disabled = false;
+    }
+  });
+}
