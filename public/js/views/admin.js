@@ -6,7 +6,7 @@ const TABS = [['reportes', '<svg class="i" aria-hidden="true"><use href="/icons.
 
 export default async function admin({ app, query }) {
   const tab = TABS.some((t) => t[0] === query.tab) ? query.tab : 'reportes';
-  const d = await api('/api/admin/overview');
+  const [d, ref] = await Promise.all([api('/api/admin/overview'), tab === 'precios' ? api(`/api/reference?state=${encodeURIComponent(query.estado || 'Michoacán')}`).then((x) => x.table).catch(() => null) : null]);
   const s = d.stats;
   const openReports = d.reports.filter((r) => r.status === 'abierto').length;
   const expired = d.lots.filter((l) => l.state === 'vencido').length;
@@ -25,7 +25,12 @@ export default async function admin({ app, query }) {
     precios: () => `<div class="row between"><p class="small muted" style="margin:0">Caché de precios del SNIIM (se actualiza cada 12 h al consultarse). Fuente: Secretaría de Economía.</p><button class="btn sm" data-refresh>Actualizar todos ahora</button></div>
       ${d.market.length ? `<div class="table-wrap"><table><thead><tr><th>Producto</th><th>Variedad SNIIM</th><th>Mercado</th><th>Fecha</th><th>Frecuente</th><th>Consultado</th></tr></thead><tbody>
       ${d.market.map((m) => `<tr><td>${e(m.product)}</td><td>${e(m.variety)}</td><td>${e(m.market)}</td><td>${e(m.price_date || '')}</td><td>${mxn(m.freq_c)}/kg</td><td>${fmtDate(m.fetched_at)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aún no hay precios guardados.</p>'}
-      ${d.market_errors.length ? `<details class="more"><summary>Últimos errores de consulta (${d.market_errors.length})</summary>${d.market_errors.map((x) => `<div class="tiny">${e(x.product)} · ${fmtDate(x.fetched_at)} · ${e(x.error)}</div>`).join('')}</details>` : ''}`,
+      ${d.market_errors.length ? `<details class="more"><summary>Últimos errores de consulta (${d.market_errors.length})</summary>${d.market_errors.map((x) => `<div class="tiny">${e(x.product)} · ${fmtDate(x.fetched_at)} · ${e(x.error)}</div>`).join('')}</details>` : ''}
+      ${ref ? `<h3 style="margin-top:18px">Referencia regional del equipo</h3>
+        <div class="notice small">${e(ref.label)}. ${e(ref.note)} Por eso se muestra como referencia y no como precio oficial del SNIIM.</div>
+        <div class="row" style="margin:8px 0"><label class="small" for="estado">Estado</label><select id="estado">${ref.states.map((x) => `<option ${x === ref.state ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
+        <div class="table-wrap"><table><thead><tr><th>Mercado</th><th>Producto</th><th>Variedad</th><th>Mín.</th><th>Máx.</th><th>Frecuente</th><th>Frescura</th></tr></thead><tbody>
+        ${ref.rows.map((r) => `<tr><td>${e(r.market)}</td><td>${e(r.product)}</td><td>${e(r.name)}</td><td>${mxn(r.min_c)}</td><td>${mxn(r.max_c)}</td><td><b>${mxn(r.freq_c)}</b></td><td>${r.hours} h</td></tr>`).join('')}</tbody></table></div>` : ''}`,
     ofertas: () => `<div class="table-wrap"><table><thead><tr><th>#</th><th>Producto</th><th>Productor</th><th>Estado</th><th>Disp./Total</th><th>Precio</th><th>Vence</th><th></th></tr></thead><tbody>
       ${d.lots.map((l) => `<tr><td>${l.id}</td><td><a href="#/oferta/${l.id}">${e(l.product)}</a>${l.is_demo ? ' <span class="pill demo">demo</span>' : ''}</td><td>${e(l.producer.name)}<div class="tiny muted">${e(municipality(l.municipality)?.name)}</div></td>
       <td>${statePill(l.state)}</td><td>${kg(l.available_g)} / ${kg(l.total_g)}</td><td>${mxn(l.rescue_price_c)} <s class="muted">${mxn(l.ref_price_c)}</s></td><td>${fmtDate(l.expires_at)}</td>
@@ -52,6 +57,7 @@ export default async function admin({ app, query }) {
   </div>`;
 
   const reload = () => admin({ app, query: { tab } });
+  document.getElementById('estado')?.addEventListener('change', (ev) => { location.hash = `#/admin?tab=precios&estado=${encodeURIComponent(ev.target.value)}`; });
   app.onclick = async (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;

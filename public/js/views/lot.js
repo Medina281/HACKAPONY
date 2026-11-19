@@ -57,15 +57,23 @@ export default async function lotView({ app, params, state }) {
     </div>
   </div>`;
 
-  // Comparar con el precio de mercado oficial (SNIIM)
-  api(`/api/market/${encodeURIComponent(l.product)}`).then(({ price: p }) => {
+  // Comparar con el SNIIM en vivo; si no hay dato, con la referencia regional del equipo (marcada como no verificada)
+  Promise.all([
+    api(`/api/market/${encodeURIComponent(l.product)}`).then((x) => x.price).catch(() => null),
+    api(`/api/reference/${encodeURIComponent(l.product)}`).then((x) => x.reference).catch(() => null),
+  ]).then(([p, r]) => {
     const box = $('#mkt');
     if (!box) return;
-    box.innerHTML = p.available
-      ? `<div class="sniim-card"><span class="mono-tag">SNIIM</span><div><strong>${mxn(p.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente de mayoreo · ${e(p.variety)} · ${e(p.market)} · ${e(p.date || '')}</span></div>
-         ${l.rescue_price_c < p.freq_c ? `<span class="pill ok">${Math.round((1 - l.rescue_price_c / p.freq_c) * 100)}% abajo del mercado</span>` : '<span class="pill muted">no está abajo del mercado</span>'}</div>`
-      : `<span class="tiny muted">Precio SNIIM no disponible ahora. <a href="${e(p.sniim_url)}" target="_blank" rel="noopener">Consultar SNIIM</a></span>`;
-  }).catch(() => {});
+    const below = (c) => (l.rescue_price_c < c ? `<span class="pill ok">${Math.round((1 - l.rescue_price_c / c) * 100)}% abajo</span>` : '<span class="pill muted">no está abajo</span>');
+    if (p?.available) {
+      box.innerHTML = `<div class="sniim-card"><span class="mono-tag">SNIIM</span><div><strong>${mxn(p.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente de mayoreo · ${e(p.variety)} · ${e(p.market)} · ${e(p.date || '')}</span></div>${below(p.freq_c)}</div>`;
+    } else if (r?.available) {
+      const v = r.variants[0];
+      box.innerHTML = `<div class="sniim-card"><span class="mono-tag">Referencia</span><div><strong>${mxn(v.freq_c)}/kg</strong> <span class="tiny muted">${e(v.name)} · ${e(r.markets[0] || r.state)} · referencia del equipo, no verificada</span></div>${below(v.freq_c)}</div>`;
+    } else if (p) {
+      box.innerHTML = `<span class="tiny muted">Precio SNIIM no disponible ahora. <a href="${e(p.sniim_url)}" target="_blank" rel="noopener">Consultar SNIIM</a></span>`;
+    }
+  });
 
   const side = $('#side');
   if (isOwner) return ownerPanel(side, l, app, state);

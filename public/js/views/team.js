@@ -16,11 +16,11 @@ export default async function team({ app }) {
 
     <h2>Entregas a domicilio en curso</h2>
     ${deliveries.length ? deliveries.map((d) => `
-      <a class="card row" href="#/pedido/${e(d.folio)}" style="text-decoration:none;color:inherit;flex-wrap:nowrap;gap:12px">
+      <a class="card row" href="${d.status === 'recogida' ? `#/seguimiento/${d.id}` : `#/pedido/${e(d.folio)}`}" style="text-decoration:none;color:inherit;flex-wrap:nowrap;gap:12px">
         <div class="grow" style="min-width:0"><div class="row between"><strong>${e(d.product)} · ${kg(d.weight_g)}</strong><span class="pill ${ST[d.status]?.[1] || 'muted'}">${ST[d.status]?.[0] || e(d.status)}</span></div>
           <div class="small muted">${e(d.buyer?.name || '')} · ${e(d.to_name)} · ${fmtDate(d.pickup_at)}</div>
           <div class="small">${d.carrier ? `${I('user')} ${e(d.carrier.name)}` : `${I('alert')} <b>Falta asignar quién lo lleva</b>`}</div></div>
-        <span class="btn sm secondary" style="flex:none">${d.status === 'abierta' ? 'Asignar' : 'Ver'}</span>
+        <span class="btn sm secondary" style="flex:none">${d.status === 'abierta' ? 'Asignar' : d.status === 'recogida' ? 'Seguir' : 'Ver'}</span>
       </a>`).join('') : '<p class="muted">No hay entregas a domicilio pendientes. Aparecen aquí cuando un comercio pide que se lo lleves.</p>'}
 
     <h2>Mis transportistas</h2>

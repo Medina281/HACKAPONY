@@ -699,3 +699,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 .price-steps div { border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px; font-size: 12px; text-align: center; background: #fff; }
 .price-steps div.now { border-color: var(--green); background: #E9F8F0; font-weight: 700; }
 .price-steps b { display: block; font-size: 15px; }
+
+/* Seguimiento en vivo */
+.map-pin { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; border: 3px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+.map-pin .i { width: 18px; height: 18px; }
+.map-pin.dest { background: #0F4D3A; }
+.map-pin.truck { width: 40px; height: 40px; background: radial-gradient(circle at 35% 30%, #8BF0C2 0%, #3FD39A 45%, #1E9566 100%); }
+.share-live { display: flex; align-items: center; gap: 10px; background: #E9F8F0; border: 1px solid #BFE8D2; border-radius: 16px; padding: 10px 12px; }
+.share-live .dot { width: 10px; height: 10px; border-radius: 50%; background: #1E9566; animation: pulse 1.2s infinite; flex: none; }
+.ref-card { margin-top: 8px; border: 1px dashed #BFD8C8; border-radius: 14px; padding: 10px; display: grid; gap: 8px; background: #fbfdfb; }

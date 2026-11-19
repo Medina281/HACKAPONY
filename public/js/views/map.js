@@ -6,7 +6,7 @@ import { municipality, productIcon } from '../shared/catalog.js';
 const LEAFLET_JS = ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg=='];
 const LEAFLET_CSS = ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w=='];
 
-function loadLeaflet() {
+export function loadLeaflet() {
   if (window.L) return Promise.resolve(window.L);
   return new Promise((resolve, reject) => {
     const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: LEAFLET_CSS[0], integrity: LEAFLET_CSS[1], crossOrigin: '' });
@@ -16,6 +16,19 @@ function loadLeaflet() {
     s.onerror = () => reject(new Error('No se pudo cargar el mapa'));
     setTimeout(() => reject(new Error('El mapa tardó demasiado')), 8000);
     document.head.append(s);
+  });
+}
+
+/** Teselas de OpenStreetMap (sin clave); si fallan varias, Esri World Street Map (también sin clave). */
+export function addTiles(L, map, maxZoom = 15) {
+  let fails = 0;
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom, attribution: '© colaboradores de OpenStreetMap' }).addTo(map);
+  osm.on('tileerror', () => {
+    if (++fails !== 4) return;
+    map.removeLayer(osm);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom, attribution: 'Teselas © Esri — fuentes: Esri, HERE, Garmin, © colaboradores de OpenStreetMap',
+    }).addTo(map);
   });
 }
 
@@ -41,17 +54,7 @@ export default async function mapView({ app, state }) {
     const map = L.map('map', { scrollWheelZoom: false }).setView([home.lat, home.lng], 8);
     // Teselas de OpenStreetMap (gratuitas, sin clave; exigen atribución y que el navegador envíe el sitio de origen).
     // Si fallan varias, se cambia a Esri World Street Map (también sin clave).
-    let fails = 0;
-    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 15, attribution: '© colaboradores de OpenStreetMap',
-    }).addTo(map);
-    osm.on('tileerror', () => {
-      if (++fails !== 4) return;
-      map.removeLayer(osm);
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 15, attribution: 'Teselas © Esri — fuentes: Esri, HERE, Garmin, © colaboradores de OpenStreetMap',
-      }).addTo(map);
-    });
+    addTiles(L, map);
     L.circleMarker([home.lat, home.lng], { radius: 8, color: '#0F4D3A', fillColor: '#3FD39A', fillOpacity: 1, weight: 3 }).addTo(map).bindTooltip(`Tú: ${home.name}`);
     for (const g of groups) {
       const n = g.lots.length;

@@ -158,3 +158,15 @@ test/                     pruebas con node:test sobre servidor y base reales
 - La vida útil por clima es una estimación orientativa con supuestos declarados; Open-Meteo gratuito es sólo para uso no comercial (para operar comercialmente hay que contratar su plan o cambiar de proveedor).
 - Falta aviso de privacidad formal (LFPDPPP) y revisión legal antes de operar con usuarios reales.
 - Los datos de demostración (personas, negocios, teléfonos, precios) son ficticios.
+
+## Seguimiento en vivo de entregas
+
+Cuando el transportista toca **"Ya cargué"**, su teléfono comparte la ubicación (Geolocation API del navegador, sin costo) mientras va en camino. El comercio y el productor de ese pedido ven en el mapa dónde va, cuántos kilómetros faltan y la hora estimada de llegada. La ubicación sólo se comparte en estado "en camino", sólo la ven esas dos partes y se borra al entregar.
+
+- Tiempo estimado = distancia en línea recta × 1.3 (rodeo de carretera) ÷ 35 km/h promedio. Es un **supuesto**, no navegación real.
+- El comercio puede marcar su ubicación exacta de entrega; si no, se usa el centro del municipio.
+- Limitación: los navegadores pausan la ubicación de una página web en segundo plano; el transportista debe dejar la pantalla abierta (la app pide mantenerla encendida).
+
+## Precios de referencia regionales (archivo del equipo)
+
+`src/data/referencia-precios.json` viene del archivo `sniim_nacional_completo.json` que entregó el equipo (30 variedades, 32 estados, 50 mercados). **No se presenta como precio oficial del SNIIM**: en los 1,500 registros el mínimo es exactamente 0.88× y el máximo 1.15× del precio frecuente, un patrón de datos generados o modelados, no de una consulta real. Por eso aparece como “Referencia regional del equipo (no verificada)”. Se usa para sugerir el precio del productor y las horas de frescura, para comparar en cada oferta y en la demo. La consulta en vivo al SNIIM sigue siendo lo único marcado como “SNIIM”.

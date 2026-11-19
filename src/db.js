@@ -270,6 +270,15 @@ const MIGRATIONS = [
   UPDATE users SET employer_id = (SELECT id FROM users WHERE phone = '4430000002' AND is_demo = 1) WHERE phone = '4430000202' AND is_demo = 1;
   `,
   },
+  // v6: seguimiento en vivo de la entrega (última posición del transportista y punto exacto de entrega opcional)
+  `
+  ALTER TABLE deliveries ADD COLUMN pos_lat REAL;
+  ALTER TABLE deliveries ADD COLUMN pos_lng REAL;
+  ALTER TABLE deliveries ADD COLUMN pos_acc REAL;
+  ALTER TABLE deliveries ADD COLUMN pos_at INTEGER;
+  ALTER TABLE deliveries ADD COLUMN dest_lat REAL;
+  ALTER TABLE deliveries ADD COLUMN dest_lng REAL;
+  `,
 ];
 
 export function openDb(file) {

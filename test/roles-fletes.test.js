@@ -88,6 +88,38 @@ describe('Transportista del productor', () => {
   });
 });
 
+describe('Seguimiento en vivo', () => {
+  test('el transportista comparte ubicación sólo en camino; comercio y productor ven tiempo estimado; nadie más', async () => {
+    const f = await orderWithDelivery(10, { dest_lat: 19.7027, dest_lng: -101.1923 });
+    await prod.post(`/api/deliveries/${f.id}/assign`, { carrier_id: carrier.id });
+    await prod.post(`/api/orders/${f.folio}/confirmar`);
+    const pos = { lat: 19.7942, lng: -101.1784, acc: 12 }; // Tarímbaro
+    assert.equal((await carrier.post(`/api/deliveries/${f.id}/position`, pos)).status, 409, 'antes de salir no comparte');
+    let t = (await buyer.get(`/api/deliveries/${f.id}/track`)).body.track;
+    assert.equal(t.position, null);
+    await carrier.post(`/api/deliveries/${f.id}/pickup`);
+    assert.equal((await carrier2.post(`/api/deliveries/${f.id}/position`, pos)).status, 403, 'otro transportista no');
+    assert.equal((await carrier.post(`/api/deliveries/${f.id}/position`, { lat: 40.7, lng: -74 })).status, 400, 'fuera de México');
+    const r = await carrier.post(`/api/deliveries/${f.id}/position`, pos);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    t = (await buyer.get(`/api/deliveries/${f.id}/track`)).body.track;
+    assert.deepEqual([t.position.lat, t.position.lng], [pos.lat, pos.lng]);
+    assert.equal(t.dest.exact, true);
+    // ~10.3 km en línea recta × 1.3 = 13.4 km a 35 km/h ≈ 23 min
+    assert.equal(t.remaining_km, 13.4);
+    assert.equal(t.eta_min, 23);
+    assert.ok((await prod.get(`/api/deliveries/${f.id}/track`)).body.track.position, 'el productor también lo ve');
+    const intruso = await user(app.base, 'comprador');
+    assert.equal((await intruso.get(`/api/deliveries/${f.id}/track`)).status, 403);
+    // Al entregar se deja de mostrar la ubicación
+    await carrier.post(`/api/deliveries/${f.id}/deliver`, { code: f.code });
+    t = (await buyer.get(`/api/deliveries/${f.id}/track`)).body.track;
+    assert.equal(t.status, 'entregada');
+    assert.equal(t.position, null);
+    assert.equal((await carrier.post(`/api/deliveries/${f.id}/position`, pos)).status, 409);
+  });
+});
+
 describe('Varios productos en un dictado', () => {
   test('divide jitomate y cebolla en dos productos con sus datos', () => {
     const r = parseMulti('Tengo cien kilos de jitomate a doce, normalmente a veinticinco, y cincuenta kilos de cebolla a ocho pesos, antes a quince, a los dos les quedan veinticuatro horas');

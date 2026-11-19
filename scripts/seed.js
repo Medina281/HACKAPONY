@@ -8,6 +8,15 @@ import { hashPassword } from '../src/auth.js';
 import { createLot } from '../src/services/lots.js';
 import { reserve, transition } from '../src/services/orders.js';
 import { requestDelivery, actOnDelivery } from '../src/services/deliveries.js';
+import { referenceFor } from '../src/services/reference.js';
+
+// Precio del productor y horas de frescura de la demo tomados de la referencia regional del equipo
+// (Mercado de Abasto de Morelia en el archivo del equipo; referencia NO verificada contra el SNIIM).
+function R(product) {
+  const r = referenceFor(product, 'Michoacán');
+  const v = r.available ? r.variants[0] : null;
+  return v ? { ref_price: Math.round(v.freq_c / 50) / 2, hours: v.hours } : {};
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,20 +68,20 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
 
   // ---- Historial (días anteriores) para que el dashboard muestre operaciones completas ----
   const d3 = now - 72 * H;
-  const old1 = lot('ramiro', d3, { product: 'Jitomate', category: 'verdura', quality: 'maduro', kg: 60, ref_price: 24, rescue_price: 13, hours: 24, min_kg: 5, pickup_window: '7:00 a 11:00', notes: 'Saladette maduro, ideal para salsa.' });
+  const old1 = lot('ramiro', d3, { product: 'Jitomate', category: 'verdura', quality: 'maduro', kg: 60, ref_price: 24, rescue_price: 13, hours: 24, min_kg: 5, pickup_window: '7:00 a 11:00', notes: 'Saladette maduro, ideal para salsa.' , ...R('Jitomate') });
   deliver(order('lupe', old1, 25, d3 + 2 * H), 'ramiro', d3 + 3 * H);
   deliver(order('comedor', old1, 30, d3 + 4 * H), 'ramiro', d3 + 5 * H);
 
   const d2 = now - 48 * H;
-  const old2 = lot('carmen', d2, { product: 'Fresa', category: 'fruta', quality: 'maduro', kg: 40, ref_price: 55, rescue_price: 30, hours: 12, min_kg: 5, notes: 'Fresa madura para aguas y mermelada.' });
+  const old2 = lot('carmen', d2, { product: 'Fresa', category: 'fruta', quality: 'maduro', kg: 40, ref_price: 55, rescue_price: 30, hours: 12, min_kg: 5, notes: 'Fresa madura para aguas y mermelada.' , ...R('Fresa') });
   deliver(order('juguera', old2, 20, d2 + H), 'carmen', d2 + 2 * H);
   const c1 = order('mercadito', old2, 10, d2 + 2 * H);
   transition(db, d2 + 3 * H, users.mercadito, c1, 'cancelar', { reason: 'Ya no lo necesito' });
 
   const d1 = now - 26 * H;
-  const old3 = lot('cuitzeo', d1, { product: 'Calabacita', category: 'verdura', quality: 'imperfeccion', kg: 35, ref_price: 18, rescue_price: 10, hours: 20, min_kg: 3 });
+  const old3 = lot('cuitzeo', d1, { product: 'Calabacita', category: 'verdura', quality: 'imperfeccion', kg: 35, ref_price: 18, rescue_price: 10, hours: 20, min_kg: 3 , ...R('Calabacita') });
   deliver(order('lupe', old3, 15, d1 + H), 'cuitzeo', d1 + 2 * H);
-  const old4 = lot('encinos', d1, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, ref_price: 48, rescue_price: 30, hours: 22, min_kg: 5, producer_transport: true });
+  const old4 = lot('encinos', d1, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, ref_price: 48, rescue_price: 30, hours: 22, min_kg: 5, producer_transport: true , ...R('Aguacate') });
   deliver(order('mercadito', old4, 40, d1 + H), 'encinos', d1 + 3 * H);
   // Entrega histórica: la huerta llevó aguacate a Morelia con su propia transportista
   const fol = order('lupe', old4, 20, d1 + 1.5 * H, 5);
@@ -86,27 +95,28 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   actOnDelivery(db, d1 + 4.5 * H, users.fletes2, did, 'deliver', { code: dc });
 
   // Lote que venció sin venderse por completo (merma visible en el dashboard)
-  lot('zina', now - 30 * H, { product: 'Guayaba', category: 'fruta', quality: 'proximo', kg: 30, ref_price: 20, rescue_price: 10, hours: 26 });
+  lot('zina', now - 30 * H, { product: 'Guayaba', category: 'fruta', quality: 'proximo', kg: 30, ref_price: 20, rescue_price: 10, hours: 26 , ...R('Guayaba') });
 
   // ---- Ofertas vigentes ----
   const t = now - 10 * 60e3;
-  lot('encinos', t, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 200, min_kg: 10, ref_price: 45, rescue_price: 28, hours: 30, pickup_window: '8:00 a 14:00', producer_transport: true, notes: 'Hass maduro, listo para guacamole del día. Puedo llevarlo a Uruapan centro.' });
-  lot('carmen', t, { product: 'Fresa', category: 'fruta', quality: 'maduro', kg: 60, min_kg: 5, ref_price: 50, rescue_price: 30, hours: 5, pickup_window: 'Hoy antes de las 18:00', notes: 'Muy madura: para aguas frescas, licuados y mermelada.' });
-  lot('zina', t, { product: 'Guayaba', category: 'fruta', quality: 'imperfeccion', kg: 80, min_kg: 5, ref_price: 22, rescue_price: 12, hours: 20, notes: 'Tamaño irregular, buen sabor.' });
-  lot('quiroga', t, { product: 'Limón', category: 'fruta', quality: 'excedente', kg: 120, min_kg: 10, ref_price: 28, rescue_price: 16, hours: 40, pickup_window: '9:00 a 17:00', producer_transport: true });
-  lot('quiroga', t, { product: 'Mango', category: 'fruta', quality: 'proximo', kg: 90, min_kg: 10, ref_price: 30, rescue_price: 15, hours: 3, notes: 'Ya maduro, para pulpa o aguas.' });
-  lot('cuitzeo', t, { product: 'Calabacita', category: 'verdura', quality: 'imperfeccion', kg: 50, min_kg: 5, ref_price: 18, rescue_price: 9, hours: 26 });
-  lot('cuitzeo', t, { product: 'Cebolla', category: 'verdura', quality: 'excedente', kg: 150, min_kg: 10, ref_price: 16, rescue_price: 10, hours: 70 });
-  lot('patz', t, { product: 'Papa', category: 'tuberculo', quality: 'imperfeccion', kg: 200, min_kg: 20, ref_price: 20, rescue_price: 13, hours: 96, notes: 'Calibre chico, ideal para guisos.' });
-  lot('encinos', t, { product: 'Plátano', category: 'fruta', quality: 'maduro', kg: 70, min_kg: 5, ref_price: 18, rescue_price: 9, hours: 10, notes: 'Pintón a maduro.' });
+  lot('encinos', t, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 200, min_kg: 10, ref_price: 45, rescue_price: 28, hours: 30, pickup_window: '8:00 a 14:00', producer_transport: true, notes: 'Hass maduro, listo para guacamole del día. Puedo llevarlo a Uruapan centro.' , ...R('Aguacate') });
+  // Publicadas hace rato: ya van por vencer y su precio ya bajó solo
+  lot('carmen', now - (R('Fresa').hours - 4) * H, { product: 'Fresa', category: 'fruta', quality: 'maduro', kg: 60, min_kg: 5, ref_price: 50, rescue_price: 30, hours: 5, pickup_window: 'Hoy antes de las 18:00', notes: 'Muy madura: para aguas frescas, licuados y mermelada.' , ...R('Fresa') });
+  lot('zina', t, { product: 'Guayaba', category: 'fruta', quality: 'imperfeccion', kg: 80, min_kg: 5, ref_price: 22, rescue_price: 12, hours: 20, notes: 'Tamaño irregular, buen sabor.' , ...R('Guayaba') });
+  lot('quiroga', t, { product: 'Limón', category: 'fruta', quality: 'excedente', kg: 120, min_kg: 10, ref_price: 28, rescue_price: 16, hours: 40, pickup_window: '9:00 a 17:00', producer_transport: true , ...R('Limón') });
+  lot('quiroga', now - (R('Mango').hours - 3) * H, { product: 'Mango', category: 'fruta', quality: 'proximo', kg: 90, min_kg: 10, ref_price: 30, rescue_price: 15, hours: 3, notes: 'Ya maduro, para pulpa o aguas.' , ...R('Mango') });
+  lot('cuitzeo', t, { product: 'Calabacita', category: 'verdura', quality: 'imperfeccion', kg: 50, min_kg: 5, ref_price: 18, rescue_price: 9, hours: 26 , ...R('Calabacita') });
+  lot('cuitzeo', t, { product: 'Cebolla', category: 'verdura', quality: 'excedente', kg: 150, min_kg: 10, ref_price: 16, rescue_price: 10, hours: 70 , ...R('Cebolla') });
+  lot('patz', t, { product: 'Papa', category: 'tuberculo', quality: 'imperfeccion', kg: 200, min_kg: 20, ref_price: 20, rescue_price: 13, hours: 96, notes: 'Calibre chico, ideal para guisos.' , ...R('Papa') });
+  lot('encinos', t, { product: 'Plátano', category: 'fruta', quality: 'maduro', kg: 70, min_kg: 5, ref_price: 18, rescue_price: 9, hours: 10, notes: 'Pintón a maduro.' , ...R('Plátano') });
   // Agotado: se apartó completo
-  const sold = lot('zina', t, { product: 'Jitomate', category: 'verdura', quality: 'excedente', kg: 40, min_kg: 5, ref_price: 22, rescue_price: 12, hours: 18 });
+  const sold = lot('zina', t, { product: 'Jitomate', category: 'verdura', quality: 'excedente', kg: 40, min_kg: 5, ref_price: 22, rescue_price: 12, hours: 18 , ...R('Jitomate') });
   order('comedor', sold, 40, t + 60e3, 3);
   // Pedido activo para el comprador demo
   const papa = db.prepare("SELECT id FROM lots WHERE product='Papa' AND expires_at > ?").get(now).id;
   const papaFolio = order('lupe', papa, 30, t + 2 * 60e3, 4);
   // Entrega en curso del productor demo: el comercio la pidió, Ramiro confirmó y se la asignó a Raúl
-  const zan = lot('ramiro', t, { product: 'Zanahoria', category: 'verdura', quality: 'imperfeccion', kg: 80, min_kg: 5, ref_price: 14, rescue_price: 8, hours: 72, producer_transport: true, notes: 'Forma irregular; entrego en Morelia con mi camioneta.' });
+  const zan = lot('ramiro', t, { product: 'Zanahoria', category: 'verdura', quality: 'imperfeccion', kg: 80, min_kg: 5, ref_price: 14, rescue_price: 8, hours: 72, producer_transport: true, notes: 'Forma irregular; entrego en Morelia con mi camioneta.' , ...R('Zanahoria') });
   const zanFolio = order('lupe', zan, 25, t + 2 * 60e3, 4);
   const openDid = requestDelivery(db, t + 3 * 60e3, users.lupe, { folio: zanFolio, address: 'Calle Allende 345, Centro, Morelia (ficticio)', to_muni: 'morelia', notes: 'Entregar por la puerta lateral' });
   db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(openDid);

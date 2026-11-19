@@ -8,6 +8,7 @@ import * as lots from './services/lots.js';
 import * as orders from './services/orders.js';
 import * as stats from './services/stats.js';
 import * as deliveries from './services/deliveries.js';
+import * as reference from './services/reference.js';
 import * as market from './services/market.js';
 import { validateRegistration, validatePhone, str } from './validate.js';
 import { MUNICIPALITIES, REPORT_REASONS } from '../public/js/shared/catalog.js';
@@ -177,10 +178,18 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     if (s.role === 'publico') throw new HttpError(403, 'No tienes acceso a esta entrega');
     return { delivery: s };
   });
+  route('POST', '/api/deliveries/:id/position', ({ user, params, body, t }) => {
+    auth.requireRole(user, 'transportista');
+    return { track: deliveries.updatePosition(db, t, user, Number(params.id), body) };
+  });
   route('POST', '/api/deliveries/:id/:action', ({ user, params, body, t }) => {
     auth.requireRole(user);
     deliveries.actOnDelivery(db, t, user, Number(params.id), params.action, body);
     return { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, Number(params.id)), user) };
+  });
+  route('GET', '/api/deliveries/:id/track', ({ user, params, t }) => {
+    auth.requireRole(user);
+    return { track: deliveries.trackInfo(db, t, deliveries.getDeliveryRow(db, Number(params.id)), user) };
   });
   route('GET', '/api/carrier/summary', ({ user }) => {
     auth.requireRole(user, 'transportista');
@@ -210,6 +219,13 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(body.active === false ? 0 : 1, d.id);
     if (body.active === false) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(d.id);
     return { drivers: deliveries.listDrivers(db, user) };
+  });
+
+  // ---------- Precios de referencia regionales (archivo del equipo, no verificados) ----------
+  route('GET', '/api/reference/:product', ({ params, query }) => ({ reference: reference.referenceFor(decodeURIComponent(params.product), query.state) }));
+  route('GET', '/api/reference', ({ user, query }) => {
+    auth.requireRole(user, 'admin');
+    return { table: reference.stateTable(query.state) };
   });
 
   // ---------- Precios de mercado (SNIIM) ----------

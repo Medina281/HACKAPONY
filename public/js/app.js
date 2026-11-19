@@ -20,6 +20,7 @@ const routes = [
   ['/admin', () => import('./views/admin.js'), { role: 'admin' }],
   ['/transportista', () => import('./views/carrier.js'), { role: 'transportista' }],
   ['/entrega/:id', () => import('./views/trip.js'), { auth: true }],
+  ['/seguimiento/:id', () => import('./views/track.js'), { auth: true }],
   ['/flete/:id', () => import('./views/trip.js'), { auth: true }],
   ['/privacidad', () => import('./views/legal.js'), { page: 'privacidad' }],
   ['/creditos', () => import('./views/legal.js'), { page: 'creditos' }],

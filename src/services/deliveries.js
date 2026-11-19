@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { tx } from '../db.js';
 import { HttpError, bad } from '../http.js';
 import { str } from '../validate.js';
-import { haversineKm, formatKg } from '../../public/js/shared/calc.js';
+import { haversineKm, formatKg, ROAD_FACTOR } from '../../public/js/shared/calc.js';
 import { municipality } from '../../public/js/shared/catalog.js';
 import { completeOrder, ACTIVE } from './orders.js';
 
@@ -45,6 +45,8 @@ export function requestDelivery(db, now, buyer, body) {
   if (address.length < 6) e.address = 'Escribe la dirección de entrega';
   const toMuni = body.to_muni || buyer.municipality;
   if (!municipality(toMuni)) e.to_muni = 'Municipio no válido';
+  const dest = validPoint(body.dest_lat, body.dest_lng);
+  if ((body.dest_lat != null || body.dest_lng != null) && !dest) e.dest = 'Ubicación no válida';
   if (Object.keys(e).length) throw bad('Revisa los datos de la entrega', e);
 
   return tx(db, () => {
@@ -65,6 +67,7 @@ export function requestDelivery(db, now, buyer, body) {
       db.prepare(`INSERT INTO deliveries (buyer_id, producer_id, from_muni, to_muni, address, distance_km, weight_g, needs_cold, notes, pickup_code, created_at, order_id)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(...vals, o.id);
     }
+    db.prepare('UPDATE deliveries SET dest_lat = ?, dest_lng = ?, pos_lat = NULL, pos_lng = NULL, pos_acc = NULL, pos_at = NULL WHERE order_id = ?').run(dest?.lat ?? null, dest?.lng ?? null, o.id);
     notify(db, o.producer_id, `${buyer.business_name || buyer.name} pidió entrega a domicilio del pedido ${o.folio}. Asígnalo a tu transportista.`, `#/pedido/${o.folio}`, now);
     return db.prepare('SELECT id FROM deliveries WHERE order_id = ?').get(o.id).id;
   });
@@ -141,7 +144,7 @@ export function actOnDelivery(db, now, user, id, action, body = {}) {
       partyCheck(d, user, 'transportista', 'admin');
       if (d.status !== 'recogida') throw new HttpError(409, 'Primero marca que ya cargaste el pedido');
       checkCode(`d${id}`, body.code, d.delivery_code);
-      db.prepare(`UPDATE deliveries SET status='entregada', delivered_at=? WHERE id=?`).run(now, id);
+      db.prepare(`UPDATE deliveries SET status='entregada', delivered_at=?, pos_lat=NULL, pos_lng=NULL, pos_acc=NULL WHERE id=?`).run(now, id);
       completeOrder(db, now, d.order_id, user.id, `Entregado por ${user.name}`);
       notify(db, d.buyer_id, `Pedido ${d.folio} entregado. ¡Gracias por rescatar alimento!`, `#/pedido/${d.folio}`, now);
       notify(db, d.producer_id, `${user.name} entregó el pedido ${d.folio}`, `#/pedido/${d.folio}`, now);
@@ -183,4 +186,58 @@ export function listDrivers(db, producer) {
       (SELECT COUNT(*) FROM deliveries d WHERE d.carrier_id = u.id AND d.status = 'entregada') delivered
     FROM users u WHERE u.role = 'transportista' AND u.employer_id = ? ORDER BY u.active DESC, u.name`).all(producer.id)
     .map((r) => ({ ...r, refrigerated: !!r.refrigerated, active: !!r.active }));
+}
+
+// ---------- Seguimiento en vivo ----------
+// El transportista comparte su ubicación desde el navegador SÓLO mientras va en camino (estado "recogida").
+// La ven únicamente el comercio y el productor de ese pedido. Al entregar se borra.
+export const AVG_KMH = 35; // velocidad promedio SUPUESTA en carretera/ciudad para el tiempo estimado
+const STALE_MS = 3 * 60e3;
+const lastPost = new Map();
+
+function validPoint(lat, lng) {
+  const a = Number(lat);
+  const b = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+  // Sólo México (margen amplio) para descartar lecturas absurdas
+  if (a < 14 || a > 33 || b < -118.5 || b > -86) return null;
+  return { lat: a, lng: b };
+}
+
+export function updatePosition(db, now, user, id, body) {
+  const d = getDeliveryRow(db, id);
+  if (user.id !== d.carrier_id) throw new HttpError(403, 'Sólo el transportista asignado comparte su ubicación');
+  if (d.status !== 'recogida') throw new HttpError(409, 'La ubicación se comparte sólo mientras vas en camino');
+  const p = validPoint(body.lat, body.lng);
+  if (!p) throw bad('Ubicación no válida', { lat: 'Fuera de rango' });
+  const prev = lastPost.get(id) || 0;
+  if (now - prev < 4000) return trackInfo(db, now, d, user); // máximo una lectura cada 4 s
+  lastPost.set(id, now);
+  const acc = Number.isFinite(Number(body.acc)) ? Math.min(5000, Math.max(0, Number(body.acc))) : null;
+  db.prepare('UPDATE deliveries SET pos_lat = ?, pos_lng = ?, pos_acc = ?, pos_at = ? WHERE id = ?').run(p.lat, p.lng, acc, now, id);
+  return trackInfo(db, now, getDeliveryRow(db, id), user);
+}
+
+/** Dónde va el pedido y en cuánto llega (estimado). */
+export function trackInfo(db, now, d, viewer) {
+  const s = serializeDelivery(d, viewer);
+  if (s.role === 'publico') throw new HttpError(403, 'No tienes acceso a esta entrega');
+  const to = municipality(d.to_muni);
+  const dest = d.dest_lat != null ? { lat: d.dest_lat, lng: d.dest_lng, exact: true } : { lat: to.lat, lng: to.lng, exact: false };
+  const from = municipality(d.from_muni);
+  const live = d.status === 'recogida' && d.pos_at != null;
+  const out = {
+    id: d.id, folio: d.folio, status: d.status, product: d.product, weight_g: d.weight_g,
+    from: { lat: from.lat, lng: from.lng, name: from.name }, dest: { ...dest, name: to.name, address: d.address },
+    carrier: s.carrier, buyer: s.buyer?.name, producer: s.producer?.name, picked_at: d.picked_at, delivered_at: d.delivered_at,
+    position: live ? { lat: d.pos_lat, lng: d.pos_lng, acc: d.pos_acc, at: d.pos_at, stale: now - d.pos_at > STALE_MS } : null,
+    avg_kmh: AVG_KMH, road_factor: ROAD_FACTOR,
+  };
+  if (live) {
+    const km = Math.round(haversineKm({ lat: d.pos_lat, lng: d.pos_lng }, dest) * ROAD_FACTOR * 10) / 10;
+    out.remaining_km = km;
+    out.eta_min = Math.max(1, Math.round((km / AVG_KMH) * 60));
+    out.eta_at = now + out.eta_min * 60e3;
+  }
+  return out;
 }

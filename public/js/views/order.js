@@ -112,12 +112,25 @@ export default async function orderView({ app, params, state }) {
     ev.preventDefault();
     const fd = Object.fromEntries(new FormData(ev.target));
     try {
+      if (!fd.dest_lat) { delete fd.dest_lat; delete fd.dest_lng; }
       await api('/api/deliveries', { method: 'POST', body: { ...fd, folio: o.folio, needs_cold: !!fd.needs_cold } });
       toast('Listo: el productor ya sabe que se lo lleve', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
     }
+  });
+  $('#useHere')?.addEventListener('change', (ev) => {
+    const f = $('#truckForm');
+    const msg = $('#hereMsg');
+    if (!ev.target.checked) { f.dest_lat.value = ''; f.dest_lng.value = ''; msg.textContent = ''; return; }
+    if (!('geolocation' in navigator)) { ev.target.checked = false; msg.textContent = 'Este navegador no permite leer tu ubicación.'; return; }
+    msg.textContent = 'Leyendo tu ubicación…';
+    navigator.geolocation.getCurrentPosition(
+      (p) => { f.dest_lat.value = p.coords.latitude; f.dest_lng.value = p.coords.longitude; msg.textContent = `Listo (±${Math.round(p.coords.accuracy)} m). Sólo la verán el productor y su transportista.`; },
+      () => { ev.target.checked = false; msg.textContent = 'No se pudo leer tu ubicación; se usará el municipio.'; },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
   });
   $('#cancelTruck')?.addEventListener('click', async () => {
     try {
@@ -156,6 +169,9 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
         <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
         <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === state.user.municipality ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select></div>
         <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
+        <label class="inline-check"><input type="checkbox" id="useHere"><span>Usar mi ubicación actual como punto de entrega <span class="tiny muted">(más exacto para el tiempo de llegada)</span></span></label>
+        <input type="hidden" name="dest_lat"><input type="hidden" name="dest_lng">
+        <div class="tiny muted" id="hereMsg"></div>
         <input name="notes" placeholder="Notas (opcional): horario, referencias…">
         <p class="tiny muted" style="margin:0">Si hay costo de envío, lo acuerdas directo con el productor.</p>
         <button class="btn">Pedir entrega</button>
@@ -177,6 +193,8 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
       ${o.status === 'apartado' ? '<p class="small muted" style="margin:0">Confirma el pedido para que tu transportista pueda cargarlo.</p>' : ''}`
       : `<p class="small" style="margin:0">Aún no tienes transportistas. <a href="#/productor/equipo">Agrega a tu personal</a> o cancela la entrega para que lo recojan.</p>`) : ''}
     ${(isBuyer || isProducer) && ['abierta', 'asignada'].includes(d.status) ? `<button class="btn ghost sm" id="cancelTruck">${isBuyer ? 'Cancelar entrega (lo recojo yo)' : 'No puedo entregarlo; que lo recojan'}</button>` : ''}
+    ${d.status === 'recogida' ? `<a class="btn" href="#/seguimiento/${d.id}">${I('pin')} Ver dónde va y cuánto falta</a>` : ''}
+    ${['asignada'].includes(d.status) && (isBuyer || isProducer) ? `<a class="btn ghost sm" href="#/seguimiento/${d.id}">${I('pin')} Seguimiento (empieza cuando salga)</a>` : ''}
     ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> a quien lo lleva.</p>' : ''}
   </div>`;
 }

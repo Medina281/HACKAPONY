@@ -298,30 +298,38 @@ export default async function publish({ app, query, state }) {
   let refSource = 'declarado';
   let sniim = null;
   let sniimFor = null;
+  let refData = null;
   let sniimTimer;
   async function loadSniim() {
     const box = $('#sniimBox');
     const p = f.product.value.trim();
     if (!box || !p || p === sniimFor) return;
     sniimFor = p;
-    box.innerHTML = '<span class="tiny muted">Consultando precio SNIIM…</span>';
-    try {
-      const { price } = await api(`/api/market/${encodeURIComponent(p)}`);
-      if (f.product.value.trim() !== p) return;
-      sniim = price.available ? price : null;
-      if (price.available) {
-        box.innerHTML = `<div class="sniim-card"><span class="mono-tag">SNIIM</span>
-          <div><strong>${mxn(price.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente · ${e(price.variety)} · ${e(price.scope === 'morelia' ? price.market : price.market + ' (no hay dato de Morelia)')} · ${e(price.date || '')}</span></div>
-          <button type="button" class="btn sm secondary" data-usesniim>Usar</button></div>
-          <a class="tiny" href="${e(price.sniim_url)}" target="_blank" rel="noopener">Fuente: SNIIM, Secretaría de Economía</a>`;
-      } else {
-        box.innerHTML = `<span class="tiny muted">${e(price.reason)} <a href="${e(price.sniim_url)}" target="_blank" rel="noopener">Ver SNIIM</a></span>`;
-        if (price.updating) { sniimFor = null; clearTimeout(sniimTimer); sniimTimer = setTimeout(loadSniim, 6000); }
-      }
-    } catch {
-      box.innerHTML = '';
-      sniimFor = null;
+    box.innerHTML = '<span class="tiny muted">Buscando precios de referencia…</span>';
+    const [live, ref] = await Promise.all([
+      api(`/api/market/${encodeURIComponent(p)}`).then((x) => x.price).catch(() => null),
+      api(`/api/reference/${encodeURIComponent(p)}`).then((x) => x.reference).catch(() => null),
+    ]);
+    if (f.product.value.trim() !== p) return;
+    sniim = live?.available ? live : null;
+    refData = ref?.available ? ref : null;
+    let html = '';
+    if (sniim) {
+      html += `<div class="sniim-card"><span class="mono-tag">SNIIM</span>
+        <div><strong>${mxn(sniim.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente · ${e(sniim.variety)} · ${e(sniim.scope === 'morelia' ? sniim.market : sniim.market + ' (no hay dato de Morelia)')} · ${e(sniim.date || '')}</span></div>
+        <button type="button" class="btn sm secondary" data-usesniim>Usar</button></div>
+        <a class="tiny" href="${e(sniim.sniim_url)}" target="_blank" rel="noopener">Fuente: SNIIM, Secretaría de Economía (consulta en vivo)</a>`;
+    } else if (live) {
+      html += `<span class="tiny muted">SNIIM en vivo: ${e(live.reason || 'sin dato')} <a href="${e(live.sniim_url)}" target="_blank" rel="noopener">Ver SNIIM</a></span>`;
+      if (live.updating) { sniimFor = null; clearTimeout(sniimTimer); sniimTimer = setTimeout(loadSniim, 6000); }
     }
+    if (refData) {
+      html += `<div class="ref-card"><div class="row between"><span class="mono-tag">Referencia ${e(refData.state)}</span><span class="tiny muted">no verificada</span></div>
+        ${refData.variants.map((v, i) => `<div class="row between" style="gap:6px"><span class="small">${e(v.name)}<br><span class="tiny muted">${e(refData.markets[0] || '')} · ${mxn(v.min_c)}–${mxn(v.max_c)} · nacional ${mxn(v.national_freq_c)} · ${v.hours} h de frescura</span></span>
+          <span class="row" style="gap:4px;flex:none"><b>${mxn(v.freq_c)}</b><button type="button" class="btn sm secondary" data-useref="${i}">Usar</button></span></div>`).join('')}
+        <p class="tiny muted" style="margin:4px 0 0">${e(refData.label)}. ${e(refData.note)}</p></div>`;
+    }
+    box.innerHTML = html;
   }
 
   // ---------- Foto: cámara primero, galería como respaldo; mismo formato 4:3 ----------
@@ -373,13 +381,20 @@ export default async function publish({ app, query, state }) {
     update();
   });
   f.addEventListener('click', (ev) => {
-    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl],button[data-clima],button[data-useshelf],button[data-usesniim]');
+    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl],button[data-clima],button[data-useshelf],button[data-usesniim],button[data-useref]');
     if (!b) return;
     if (b.dataset.p) (set('product', b.dataset.p), autoCategory(), loadSniim());
     if ('usesniim' in b.dataset && sniim) {
       set('ref_price', sniim.freq_c / 100);
       refSource = 'sniim';
       toast('Precio de referencia tomado del SNIIM', 'ok');
+    }
+    if (b.dataset.useref != null && refData) {
+      const v = refData.variants[Number(b.dataset.useref)];
+      set('ref_price', v.freq_c / 100);
+      if (!f.hours.value) set('hours', v.hours);
+      refSource = 'declarado';
+      toast(`Usamos la referencia de ${v.name}${!f.hours.value ? '' : ''}. Ajústala si tu precio es otro.`, 'ok');
     }
     if (b.dataset.h) set('hours', b.dataset.h);
     if ('useshelf' in b.dataset && shelf) set('hours', shelf.hours);

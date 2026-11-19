@@ -2,6 +2,8 @@
 import { api } from '../api.js';
 import { $, e, kg, toast, fmtDate, waLink } from '../ui.js';
 import { municipality } from '../shared/catalog.js';
+import { onLeave } from '../app.js';
+import * as geo from '../geo-share.js';
 
 const STEPS = [['asignada', 'Asignado'], ['recogida', 'En camino'], ['entregada', 'Entregado']];
 const I = (n) => `<svg class="i" aria-hidden="true"><use href="/icons.svg#${n}"/></svg>`;
@@ -46,7 +48,9 @@ export default async function trip({ app, params }) {
             <input id="code" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:800">
             <button class="btn big">${I('check-circle')} Entregado</button></form>` : ''}
         </div>
-        ${['asignada', 'recogida'].includes(d.status) ? `<a class="btn secondary" target="_blank" rel="noopener" href="${dir}">${I('navigation')} Ver ruta en el mapa</a>` : ''}
+        ${isCarrier && d.status === 'recogida' ? '<div id="share"></div>' : ''}
+        ${['asignada', 'recogida'].includes(d.status) ? `<a class="btn secondary" target="_blank" rel="noopener" href="${dir}">${I('navigation')} Ver ruta en Google Maps</a>` : ''}
+        ${!isCarrier && d.status === 'recogida' ? `<a class="btn" href="#/seguimiento/${d.id}">${I('pin')} Ver dónde va</a>` : ''}
         ${d.notes ? `<p class="small muted">Notas del comercio: “${e(d.notes)}”</p>` : ''}
         ${d.needs_cold ? `<span class="pill info">${I('snow')} Requiere refrigeración</span>` : ''}
         <p class="tiny muted">La distancia es en línea recta; por carretera suele ser mayor. El pago del pedido se arregla directo entre el comercio y el productor.</p>
@@ -54,10 +58,23 @@ export default async function trip({ app, params }) {
     </div>
   </div>`;
 
+  // Compartir ubicación mientras va en camino
+  const shareBox = $('#share');
+  const paint = (st) => {
+    if (!shareBox) return;
+    shareBox.innerHTML = st.active && st.id === d.id
+      ? `<div class="share-live"><span class="dot"></span><div class="grow small"><b>Compartiendo tu ubicación</b><br><span class="muted">${st.last ? `Última lectura ±${Math.round(st.last.acc)} m · ${st.sent} enviadas` : 'Buscando señal GPS…'}. Deja esta pantalla abierta.</span>${st.error ? `<br><span style="color:var(--red)">${st.error}</span>` : ''}</div><button type="button" class="btn ghost sm" id="stopShare">Dejar de compartir</button></div>`
+      : `<div class="stack"><button type="button" class="btn big" id="startShare">${I('pin')} Compartir mi ubicación</button><p class="tiny muted" style="margin:0">El comercio y ${e(d.producer.name)} verán en el mapa dónde vas y cuánto falta, sólo mientras vas en camino. Se deja de compartir al entregar.</p>${st.error ? `<p class="small" style="color:var(--red);margin:0">${st.error}</p>` : ''}</div>`;
+    $('#stopShare', shareBox)?.addEventListener('click', () => geo.stop());
+    $('#startShare', shareBox)?.addEventListener('click', () => geo.start(d.id));
+  };
+  if (shareBox) { paint(geo.status()); onLeave(geo.onChange(paint)); }
+
   $('#pickup')?.addEventListener('click', async (ev) => {
     ev.target.disabled = true;
     try {
       await api(`/api/deliveries/${d.id}/pickup`, { method: 'POST' });
+      geo.start(d.id); // el toque en "Ya cargué" pide el permiso de ubicación
       toast('Listo: el comercio ya sabe que vas en camino', 'ok');
       trip({ app, params });
     } catch (err) {
@@ -69,6 +86,7 @@ export default async function trip({ app, params }) {
     ev.preventDefault();
     try {
       await api(`/api/deliveries/${d.id}/deliver`, { method: 'POST', body: { code: ev.target.code.value } });
+      geo.stop();
       toast('¡Entrega registrada!', 'ok');
       trip({ app, params });
     } catch (err) {
