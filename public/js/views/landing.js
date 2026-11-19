@@ -1,10 +1,11 @@
 import { api } from '../api.js';
 import { e, mxn, kg, media } from '../ui.js';
+import { lotCard } from './components.js';
 
 export default async function landing({ app, state }) {
   const [st, feed] = await Promise.all([
     api('/api/stats').then((r) => r.stats).catch(() => null),
-    api('/api/lots?sort=urgencia').then((r) => r.lots.slice(0, 3)).catch(() => []),
+    api('/api/lots?sort=urgencia').then((r) => r.lots.slice(0, 6)).catch(() => []),
   ]);
   const u = state.user;
   const home = u ? { productor: '#/productor', comprador: '#/ofertas', transportista: '#/transportista', admin: '#/admin' }[u.role] : null;
@@ -19,7 +20,7 @@ export default async function landing({ app, state }) {
         <div><span class="mono-tag" style="background:rgba(255,255,255,.14);color:#fff">Urgente · −${Math.round(feed[0].discount)}%</span>
           <h2 style="margin-top:10px">${e(feed[0].product)} a ${mxn(feed[0].rescue_price_c)}/kg</h2>
           <p class="small" style="margin:0 0 12px">${kg(feed[0].available_g)} en ${e(feed[0].municipality_name)}</p>
-          <span class="btn sm">Apartar</span></div>
+          <span class="btn sm light">Apartar ahora</span></div>
         <div class="lot-media" style="margin:0;border-radius:20px">${media(feed[0].photo, feed[0].product)}</div>
       </a>` : ''}
       <div class="cat-tiles">
@@ -35,10 +36,8 @@ export default async function landing({ app, state }) {
   </section>
 
   ${feed.length ? `<section class="section" style="padding-top:0"><div class="wrap stack">
-    <div class="row between"><h2 style="margin:0">Urgentes ahora</h2><a href="#/ofertas" class="small">Ver todas →</a></div>
-    <div class="grid">${feed.map((l) => `<a class="card row" href="#/oferta/${l.id}" style="text-decoration:none;color:inherit;flex-wrap:nowrap;padding:10px">
-      <div class="lot-media" style="width:96px;margin:0;flex:none;font-size:2rem">${media(l.photo, l.product)}</div>
-      <div class="grow"><strong>${e(l.product)}</strong><div class="small muted">${kg(l.available_g)} · ${e(l.municipality_name)}</div><div><strong>${mxn(l.rescue_price_c)}/kg</strong> <span class="pill warn">−${Math.round(l.discount)}%</span></div></div></a>`).join('')}</div>
+    <div class="sec-head"><h2 style="margin:0">Urgentes ahora</h2><a href="#/ofertas">Ver todas</a></div>
+    <div class="hscroll">${feed.map((l) => lotCard(l)).join('')}</div>
   </div></section>` : ''}
 
   ${st ? `<section class="section" style="padding-top:0"><div class="wrap">

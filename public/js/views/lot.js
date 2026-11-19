@@ -19,14 +19,17 @@ export default async function lotView({ app, params, state }) {
 
   app.innerHTML = `
   <div class="wrap page">
-    <p><a href="#/ofertas">← Ofertas</a></p>
+    <div class="detail-top"><a class="sq-btn" href="#/ofertas" aria-label="Volver a ofertas"><svg class="i" aria-hidden="true"><use href="/icons.svg#arrow-left"/></svg></a>
+      <a class="sq-btn" target="_blank" rel="noopener" href="${waLink('', shareText(l))}" aria-label="Compartir por WhatsApp"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg></a></div>
     <div class="layout-2">
       <div class="stack">
         <div class="lot" data-lot="${l.id}">
-          <div class="lot-media" style="height:220px;font-size:6rem">${media(l.photo, l.product)}${statePill(l.state)}<span class="disc">−${Math.round(l.discount)}%</span></div>
+          <div class="detail-head"><h1>${e(l.product)}</h1><p class="muted">${e(qualityLabel(l.quality))} · ${e(l.municipality_name)}</p></div>
+          <div class="lot-media detail-media">${media(l.photo, l.product)}${statePill(l.state)}<span class="disc">−${Math.round(l.discount)}%</span></div>
           <div class="lot-body">
-            <div class="row between"><h1 style="margin:0">${e(l.product)}</h1>${l.is_demo ? '<span class="pill demo">dato de demostración</span>' : ''}</div>
-            <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans)">/kg</span><s>${mxn(l.ref_price_c)} ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'}</s></div>
+            <div class="price-tab"><span class="muted small">Precio de rescate</span><div class="price">${mxn(l.rescue_price_c)}<small>/kg</small></div>
+              <span class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'precio SNIIM' : 'habitual declarado*'}</span></div>
+            ${l.is_demo ? '<span class="pill demo">dato de demostración</span>' : ''}
             <div class="row"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> Frescura comercial estimada:</span> ${timer(l.expires_at)}</div>
             <div id="mkt" class="sniim"></div>
             <dl class="kv">

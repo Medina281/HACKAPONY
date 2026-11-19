@@ -5,9 +5,12 @@ import { ROAD_FACTOR } from '../shared/calc.js';
 export function lotCard(l, { owner = false } = {}) {
   const open = ['disponible', 'por_vencer'].includes(l.state);
   const pct = Math.round((l.available_g / l.total_g) * 100);
-  const dist = l.distance_km != null
-    ? `<span title="Distancia en línea recta entre cabeceras municipales"><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ~${l.distance_km} km línea recta${l.distance_km > 40 ? ' <svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg>' : ''}</span>`
-    : '';
+  const I = (n) => `<svg class="i" aria-hidden="true"><use href="/icons.svg#${n}"/></svg>`;
+  const action = owner
+    ? `<a class="round-btn" href="#/oferta/${l.id}" aria-label="Administrar ${e(l.product)}">${I('edit')}</a>`
+    : open
+      ? `<a class="round-btn" href="#/oferta/${l.id}" data-needs-open aria-label="Apartar ${e(l.product)}">${I('plus')}</a>`
+      : `<button class="round-btn" disabled aria-label="${l.state === 'agotado' ? 'Agotado' : 'Vencido'}">${I('x')}</button>`;
   return `
   <article class="lot ${open ? '' : 'closed'} ${l.state === 'por_vencer' ? 'urgent' : ''}" data-lot="${l.id}">
     <a href="#/oferta/${l.id}" class="lot-media" style="text-decoration:none" aria-label="Ver ${e(l.product)}">
@@ -17,17 +20,13 @@ export function lotCard(l, { owner = false } = {}) {
     </a>
     <div class="lot-body">
       <div class="lot-title"><h3>${e(l.product)}</h3>${l.is_demo ? '<span class="pill demo" title="Dato de demostración">demo</span>' : ''}</div>
-      <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans);font-weight:500">/kg</span><s>${mxn(l.ref_price_c)} ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'}</s></div>
-      <div class="meta"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> ${e(l.producer.name)}</span><span><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(l.municipality_name)}</span>${dist}</div>
-      <div class="meta"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#leaf"/></svg> ${e(qualityLabel(l.quality))}</span>${l.producer_transport ? '<span><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Productor puede llevarlo</span>' : ''}</div>
-      <div class="row between small"><span><strong>${kg(l.available_g)}</strong> de ${kg(l.total_g)} disponibles</span><span><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> ${timer(l.expires_at)}</span></div>
+      <div class="sub">${e(l.producer.name)} · ${e(l.municipality_name)}${l.distance_km != null ? ` · ~${l.distance_km} km` : ''}</div>
+      <div class="meta"><span>${I('leaf')} ${e(qualityLabel(l.quality))}</span><span>${I('clock')} ${timer(l.expires_at)}</span>${l.producer_transport ? `<span>${I('truck')} Lo lleva</span>` : ''}${l.distance_km > 40 ? `<span title="Distancia en línea recta mayor a 40 km">${I('alert')} lejos</span>` : ''}</div>
       <div class="bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
       <div class="lot-foot">
-        ${owner
-          ? `<a class="btn secondary" href="#/oferta/${l.id}">Administrar</a>`
-          : open
-            ? `<a class="btn" href="#/oferta/${l.id}" data-needs-open>Apartar</a>`
-            : `<button class="btn" disabled>${l.state === 'agotado' ? 'Agotado' : 'Vencido'}</button>`}
+        <div><div class="price">${mxn(l.rescue_price_c)}<small>/kg</small></div>
+          <div class="tiny muted"><s>${mxn(l.ref_price_c)}</s> ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'} · ${kg(l.available_g)} libres</div></div>
+        ${action}
       </div>
     </div>
   </article>`;
