@@ -62,10 +62,10 @@ export default async function orderView({ app, params, state }) {
 
         ${deliveryBlock(o, isBuyer, isProducer, active, state)}
 
-        ${isProducer && active && !(o.delivery && ['asignada', 'recogida'].includes(o.delivery.status)) ? `<div class="card stack" style="background:var(--cream)">
+        ${isProducer && active ? `<div class="card stack" style="background:var(--cream)">
           ${o.status === 'apartado' ? `<button class="btn block" data-act="confirmar">✔️ Confirmar pedido</button>` : ''}
           ${o.status === 'confirmado' ? `<button class="btn secondary block" data-act="listo">📦 Marcar listo para recoger</button>` : ''}
-          ${o.status !== 'apartado' ? `<form id="deliver" class="stack"><label for="code">Código que te dicta el comprador</label>
+          ${o.status !== 'apartado' && !(o.delivery && ['asignada', 'recogida'].includes(o.delivery.status)) ? `<form id="deliver" class="stack"><label for="code">Código que te dicta el comprador</label>
             <input id="code" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:800">
             <button class="btn big">✅ Registrar entrega</button></form>` : ''}
         </div>` : ''}
@@ -172,10 +172,10 @@ function deliveryBlock(o, isBuyer, isProducer, active, state) {
     <div class="small">${mxn(d.fee_c)} · a ${e(d.address)}${d.needs_cold ? ' · ❄️' : ''}</div>
     ${c ? `<div class="small">${e(c.name)} · ${e(c.vehicle || '')}</div>
       ${d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}">💬 WhatsApp al transportista</a>` : ''}` : ''}
-    ${isProducer && d.status === 'asignada' ? `<form id="handoff" class="stack"><label for="hcode">Código que te dice el transportista</label>
+    ${isProducer && d.status === 'asignada' && o.status === 'apartado' ? '<p class="small" style="margin:0">Confirma el pedido para poder entregarlo al transportista.</p>' : ''}
+    ${isProducer && d.status === 'asignada' && o.status !== 'apartado' ? `<form id="handoff" class="stack"><label for="hcode">Código que te dice el transportista</label>
       <input id="hcode" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.4rem;letter-spacing:.3em;text-align:center;font-weight:800">
-      <button class="btn">📦 Entregar al transportista</button>
-      ${o.status === 'apartado' ? '<p class="tiny muted" style="margin:0">Primero confirma el pedido.</p>' : ''}</form>` : ''}
+      <button class="btn">📦 Entregar al transportista</button></form>` : ''}
     ${isBuyer && ['abierta', 'asignada'].includes(d.status) ? '<button class="btn ghost sm" id="cancelTruck">Cancelar flete (lo recojo yo)</button>' : ''}
     ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> al transportista.</p>' : ''}
   </div>`;

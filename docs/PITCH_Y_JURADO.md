@@ -58,7 +58,7 @@ Respaldo: si falla el Wi-Fi, todo corre en `localhost`; sólo el mapa necesita i
 
 **¿Cómo funciona sin conexión estable?** Es una PWA ligera (sin fuentes externas, fotos reducidas en el teléfono, mapa sólo bajo demanda). Sin señal se pueden consultar las ofertas guardadas, marcadas como desactualizadas, y el formulario guarda borrador. Apartar y publicar **requieren** confirmación del servidor; nunca se simula un apartado sin conexión.
 
-**¿Quién se encarga del transporte?** El comprador recoge, o el productor si marcó “puedo llevarlo” (costo a acordar). No prometemos logística propia. La calculadora de ahorro neto ayuda a decidir si conviene el viaje.
+**¿Quién se encarga del transporte?** Transportistas independientes registrados toman los fletes que pide el comercio; la entrega se verifica con dos códigos (recolección y entrega). No ofrecemos flotilla propia. Antes: El comprador recoge, o el productor si marcó “puedo llevarlo” (costo a acordar). No prometemos logística propia. La calculadora de ahorro neto ayuda a decidir si conviene el viaje.
 
 **¿Y si el alimento no es apto para consumo?** No existe la opción “no apto” para publicar; hay una declaración obligatoria y estados declarados (excedente, imperfección, maduro, próximo a perder valor). Al recoger, el comprador puede cancelar con “no corresponde”: se abre un reporte, el inventario no se reactiva y la oferta se pausa para revisión. El temporizador no certifica inocuidad y así se indica.
 

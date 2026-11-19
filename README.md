@@ -12,7 +12,7 @@ npm run demo     # crea la base de demostración y levanta el servidor
 # o por separado:
 npm run seed     # (re)crea data/raiz.db con datos ficticios de Michoacán
 npm start        # http://localhost:3000  (PORT=xxxx para otro puerto)
-npm test         # 25 pruebas automatizadas
+npm test         # 37 pruebas automatizadas
 ```
 
 Desde un celular en la misma red Wi-Fi: usa la dirección que imprime la consola (`http://192.168.x.x:3000`).
@@ -23,6 +23,7 @@ Desde un celular en la misma red Wi-Fi: usa la dirección que imprime la consola
 |---|---|---|
 | Productor | 4430000001 | Ramiro Hernández, Tarímbaro |
 | Comprador | 4430000101 | Fonda Doña Lupe, Morelia |
+| Transportista | 4430000201 | Raúl Pérez, Morelia (camioneta 1.5 t) |
 | Administrador | 4430000999 | Administración |
 
 En la pantalla “Entrar” hay botones de un toque para cada cuenta. Para probar WhatsApp con tu propio teléfono, cámbialo en **Perfil**.
@@ -37,6 +38,28 @@ En la pantalla “Entrar” hay botones de un toque para cada cuenta. Para proba
 | Confirmación lista para recolección | `#/pedido/RD-0001` — folio, código de entrega de 6 dígitos, punto y horario, WhatsApp prellenado, “Cómo llegar” |
 
 Además: reservas parciales con transacciones (sin sobreventa), ciclo de pedido controlado en servidor (apartado → confirmado → listo → recolectado / cancelado / vencido), liberación automática de apartados no recogidos (3 h de tolerancia), entrega confirmada sólo con el código del comprador, panel del productor (3 acciones grandes), panel del comprador, dashboard de impacto en vivo (con interruptor “sólo datos reales”), mapa Leaflet/OSM con respaldo en lista, panel de administración (reportes, moderación, suspensión), reportes de irregularidades, sugerencia de rebaja por reglas (el productor la autoriza), PWA instalable con consulta sin conexión marcada como desactualizada.
+
+## Cuatro interfaces
+
+| Rol | Funciones únicas |
+|---|---|
+| **Productor** | Publicar por voz/cámara/frase, varios productos en un dictado, sugerencia de precio, vida útil por clima, precio SNIIM, confirmar pedidos y entregar con código (al comercio o al transportista). |
+| **Comercio** | Tablero con filtros, comparación con precio SNIIM, apartado parcial, calculadora de traslado, **pedir transportista** (ofrece el pago), código de entrega. |
+| **Transportista** | Tablero de fletes cercanos que caben en su vehículo (capacidad, refrigeración, radio), tomar viaje con un toque (sin carreras: sólo uno lo gana), ruta en mapa, código de recolección para el productor, captura del código del comercio, ganancias. |
+| **Administración** | Reportes con acciones (pausar oferta, suspender productor) y aviso al que reportó, ofertas, pedidos, fletes, usuarios, caché de precios SNIIM. |
+
+Raíz Directa conecta con transportistas independientes; no presta el servicio de transporte.
+
+## Precios reales del SNIIM
+
+El servidor consulta la página de resultados de “Frutas y Hortalizas” del SNIIM (Secretaría de Economía) con el `ProductoId` de cada producto (tomado del mapa del sitio), prefiere el **Mercado de Abasto de Morelia** y, si no hay dato, usa la mediana de los mercados del día. Guarda el resultado 12 h. Si SNIIM no responde, muestra “sin dato” con enlace oficial: **nunca inventa precios**. El precio de referencia de una oferta sólo se marca “SNIIM” si coincide con el dato guardado.
+> Limitación: desde el entorno de desarrollo no se pudo abrir la página de resultados del SNIIM, así que el lector se probó con una tabla de ejemplo con el formato esperado. Antes del evento, entra como admin → Precios SNIIM → “Actualizar todos ahora” con internet para verificarlo.
+
+## Fotos
+
+- **Cámara integrada** (botón principal) con visor y marco; galería como respaldo.
+- **Formato único 4:3** (960×720, JPEG ~70 %): vertical u horizontal se recorta al centro; todas las tarjetas se ven iguales.
+- Si no hay foto del productor, se muestra una **foto real de Wikimedia Commons** con licencia libre, marcada “referencia” (créditos en `#/creditos`). Sin internet se muestra el ícono.
 
 ## Asistente de Publicación por Voz
 

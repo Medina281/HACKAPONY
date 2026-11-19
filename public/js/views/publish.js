@@ -279,9 +279,10 @@ export default async function publish({ app, query, state }) {
   }
 
   async function publishMany(list) {
-    const lotsBody = list.map((d) => {
+    const lotsBody = list.map((d, i) => {
       const est = forecast ? estimateShelfLife({ product: d.product, quality: d.quality, temps: forecast.temps, humidity: forecast.humidity }) : null;
-      return { ...d, input_method: 'voz', shelf: est ? { ...est, source: forecast.source } : null };
+      // La foto tomada se asigna al primer producto (los demás usan foto de referencia hasta que el productor suba la suya).
+      return { ...d, photo: i === 0 ? photo : null, input_method: 'voz', shelf: est ? { ...est, source: forecast.source } : null };
     });
     const { lots } = await api('/api/lots/batch', { method: 'POST', body: { lots: lotsBody } });
     localStorage.removeItem(DRAFT);
@@ -352,7 +353,7 @@ export default async function publish({ app, query, state }) {
   const formApi = { get, set, update, autoCategory, meta: { pending_prices: [] } };
   const estimate = (product, quality) => (forecast ? estimateShelfLife({ product, quality, temps: forecast.temps, humidity: forecast.humidity }) : null);
   const assistant = mountAssistant({
-    form: formApi, user, summaryHtml, getShelf: () => shelf, estimate, publishMany,
+    form: formApi, user, summaryHtml, getShelf: () => shelf, estimate, publishMany, hasPhoto: () => !!photo,
     publish: () => { method = 'voz'; return doPublish(); },
     showForm: () => $('#formCard').scrollIntoView({ behavior: 'smooth' }),
   });

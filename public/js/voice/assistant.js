@@ -274,6 +274,7 @@ export function mountAssistant(ctx) {
     }).join('');
     const muni = municipality(list[0].get().municipality);
     const b = bot(`<strong>Revisa antes de publicar${multi() ? ` (${list.length} ofertas)` : ''}:</strong>${rows}
+      ${multi() && ctx.hasPhoto?.() ? `<div class="tiny muted">📷 Tu foto se usará para ${e(nameOf(list[0]))}.</div>` : ''}
       ${multi() ? `<div class="small" style="margin-top:6px">Zona: ${e(muni?.name || '')} · Total que puedes recuperar: <strong>${mxn(totalRes)}</strong> <span class="muted">(valor habitual ${mxn(totalRef)})</span></div>` : ''}
       <label class="inline-check va-decl"><input type="checkbox" data-decl ${form.get().declaration ? 'checked' : ''}><span>Declaro que ${multi() ? 'todos son' : 'es'} <strong>aptos para consumo humano</strong> y la información es verdadera.</span></label>
       <div class="two" style="margin-top:10px"><button type="button" class="btn" data-pub>✅ Publicar</button><button type="button" class="btn secondary" data-fix>✏️ Corregir</button></div>`,
