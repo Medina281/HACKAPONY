@@ -50,10 +50,10 @@ export default async function mapView({ app, state }) {
       }).addTo(map).bindPopup(`<strong>${e(g.m.name)}</strong><br>${listHtml(g)}`);
     }
   } catch (err) {
-    $('#map').innerHTML = `<div class="empty"><div class="big">🗺️</div><p>${e(err.message)}. Te mostramos la lista por municipio (funciona sin mapa).</p></div>`;
+    $('#map').innerHTML = `<div class="empty"><div class="big"><svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg></div><p>${e(err.message)}. Te mostramos la lista por municipio (funciona sin mapa).</p></div>`;
     Object.assign($('#map').style, { height: 'auto', minHeight: '0' });
   }
   $('#fallback').innerHTML = groups.length
-    ? groups.map((g) => `<div class="card"><h3>📍 ${e(g.m.name)} <span class="pill">${g.lots.length}</span></h3>${listHtml(g)}</div>`).join('')
+    ? groups.map((g) => `<div class="card"><h3><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> ${e(g.m.name)} <span class="pill">${g.lots.length}</span></h3>${listHtml(g)}</div>`).join('')
     : '<p class="muted">No hay ofertas disponibles ahora.</p>';
 }

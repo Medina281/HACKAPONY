@@ -33,22 +33,22 @@ export default async function trip({ app, params }) {
           <strong>1 · Recoger</strong>
           <div>${e(d.producer.name)}<br><span class="muted">${e(d.producer.pickup_point || 'Por acordar')} · ${e(from?.name)}</span></div>
           <div class="small">Horario: ${fmtDate(d.pickup_at)}${d.pickup_window ? ` · ${e(d.pickup_window)}` : ''}</div>
-          ${isCarrier && d.status === 'asignada' ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(d.producer.phone, `Hola, soy ${d.carrier?.name || 'el transportista'} de Raíz Directa. Paso por el pedido ${d.folio} (${kg(d.weight_g)} de ${d.product}). ¿A qué hora le queda bien?`)}">💬 Avisar al productor</a>` : ''}
+          ${isCarrier && d.status === 'asignada' ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(d.producer.phone, `Hola, soy ${d.carrier?.name || 'el transportista'} de Raíz Directa. Paso por el pedido ${d.folio} (${kg(d.weight_g)} de ${d.product}). ¿A qué hora le queda bien?`)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> Avisar al productor</a>` : ''}
         </div>
         <div class="card stack">
           <strong>2 · Entregar</strong>
           <div>${e(d.buyer.name)} · ${e(d.buyer.contact)}<br><span class="muted">${e(d.buyer.address)} · ${e(to?.name)}</span></div>
-          ${isCarrier && ['asignada', 'recogida'].includes(d.status) ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(d.buyer.phone, `Hola, soy el transportista de Raíz Directa con su pedido ${d.folio}. Voy en camino.`)}">💬 Avisar al comercio</a>` : ''}
+          ${isCarrier && ['asignada', 'recogida'].includes(d.status) ? `<a class="btn wa" target="_blank" rel="noopener" href="${waLink(d.buyer.phone, `Hola, soy el transportista de Raíz Directa con su pedido ${d.folio}. Voy en camino.`)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> Avisar al comercio</a>` : ''}
         </div>
-        <a class="btn secondary" target="_blank" rel="noopener" href="${dir}">🧭 Ver ruta en el mapa</a>` : '<p class="muted">Los datos de contacto aparecen al tomar el viaje.</p>'}
+        <a class="btn secondary" target="_blank" rel="noopener" href="${dir}"><svg class="i" aria-hidden="true"><use href="/icons.svg#navigation"/></svg> Ver ruta en el mapa</a>` : '<p class="muted">Los datos de contacto aparecen al tomar el viaje.</p>'}
 
         ${isCarrier && d.status === 'recogida' ? `<form id="deliver" class="stack">
           <label for="code">Código de entrega que te dicta el comercio</label>
           <input id="code" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:800">
-          <button class="btn big">✅ Entregado</button></form>` : ''}
+          <button class="btn big"><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Entregado</button></form>` : ''}
         ${isCarrier && d.status === 'asignada' ? '<button class="btn ghost" id="release">Ya no puedo hacer este viaje</button>' : ''}
         ${d.notes ? `<p class="small muted">Notas: “${e(d.notes)}”</p>` : ''}
-        ${d.needs_cold ? '<span class="pill info">❄️ Requiere refrigeración</span>' : ''}
+        ${d.needs_cold ? '<span class="pill info"><svg class="i" aria-hidden="true"><use href="/icons.svg#snow"/></svg> Requiere refrigeración</span>' : ''}
         <p class="tiny muted">El cobro del flete (${mxn(d.fee_c)}) se acuerda directo con el comercio. La distancia es en línea recta; por carretera suele ser mayor.</p>
       </div>
     </div>
@@ -58,7 +58,7 @@ export default async function trip({ app, params }) {
     ev.preventDefault();
     try {
       await api(`/api/deliveries/${d.id}/deliver`, { method: 'POST', body: { code: ev.target.code.value } });
-      toast('¡Entrega registrada! ✅', 'ok');
+      toast('¡Entrega registrada! <svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg>', 'ok');
       trip({ app, params });
     } catch (err) {
       toast(err.message, 'error');

@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { e, mxn, kg, statePill, orderPill, toast, fmtDate } from '../ui.js';
 import { REPORT_REASONS, municipality } from '../shared/catalog.js';
 
-const TABS = [['reportes', '🚩 Reportes'], ['ofertas', '🧺 Ofertas'], ['pedidos', '📦 Pedidos'], ['fletes', '🚚 Fletes'], ['usuarios', '👥 Usuarios'], ['precios', '📈 Precios SNIIM']];
+const TABS = [['reportes', '<svg class="i" aria-hidden="true"><use href="/icons.svg#flag"/></svg> Reportes'], ['ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg> Ofertas'], ['pedidos', '<svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg> Pedidos'], ['fletes', '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Fletes'], ['usuarios', '<svg class="i" aria-hidden="true"><use href="/icons.svg#users"/></svg> Usuarios'], ['precios', '<svg class="i" aria-hidden="true"><use href="/icons.svg#trending"/></svg> Precios SNIIM']];
 
 export default async function admin({ app, query }) {
   const tab = TABS.some((t) => t[0] === query.tab) ? query.tab : 'reportes';

@@ -53,14 +53,14 @@ export default async function publish({ app, query, state }) {
 
         <div class="card quick">
           <button type="button" class="voice voice-launch" id="openVA">
-            <span class="mic-big" aria-hidden="true">🎤</span>
+            <span class="mic-big" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></span>
             <span class="voice-text">
               <strong>${canRecognize ? 'Publicar hablando' : 'Publicar escribiendo como en WhatsApp'}</strong>
               <span class="small muted">${canRecognize ? 'Dímelo como un mensaje de voz; te pregunto lo que falte y tú confirmas.' : 'Tu navegador no permite dictar; escríbeme y lleno el formulario.'}</span>
             </span>
           </button>
 
-          <button type="button" class="link-toggle" id="writeToggle" aria-expanded="false" aria-controls="writeBox">✍️ ¿Prefieres escribirlo aquí?</button>
+          <button type="button" class="link-toggle" id="writeToggle" aria-expanded="false" aria-controls="writeBox"><svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> ¿Prefieres escribirlo aquí?</button>
           <div id="writeBox" class="write-box" hidden>
             <p class="phrase" aria-label="Frase para completar">
               Tengo <input class="blank n" data-s="kg" inputmode="decimal" placeholder="100" aria-label="Kilos"> kilos de
@@ -77,21 +77,21 @@ export default async function publish({ app, query, state }) {
           </div>
         </div>
 
-        ${templates.length ? `<div><div class="small muted">Mis plantillas</div><div class="chips">${templates.map((t) => `<button type="button" class="chip" data-tpl="${t.id}">⭐ ${e(t.name)}</button>`).join('')}</div></div>` : ''}
+        ${templates.length ? `<div><div class="small muted">Mis plantillas</div><div class="chips">${templates.map((t) => `<button type="button" class="chip" data-tpl="${t.id}"><svg class="i" aria-hidden="true"><use href="/icons.svg#star"/></svg> ${e(t.name)}</button>`).join('')}</div></div>` : ''}
 
         <div class="card" id="formCard">
           <div class="field photo-field">
-            <div class="photo-slot" id="photoSlot"><span>📷</span><small>Foto real del producto (opcional)</small></div>
+            <div class="photo-slot" id="photoSlot"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg></span><small>Foto real del producto (opcional)</small></div>
             <div class="row">
-              <button type="button" class="btn grow" id="camBtn">📷 Tomar foto</button>
-              <button type="button" class="btn ghost" id="galBtn" aria-label="Elegir de la galería">🖼️</button>
-              <button type="button" class="btn ghost" id="delPhoto" hidden aria-label="Quitar foto">✕</button>
+              <button type="button" class="btn grow" id="camBtn"><svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg> Tomar foto</button>
+              <button type="button" class="btn ghost" id="galBtn" aria-label="Elegir de la galería"><svg class="i" aria-hidden="true"><use href="/icons.svg#image"/></svg></button>
+              <button type="button" class="btn ghost" id="delPhoto" hidden aria-label="Quitar foto"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg></button>
             </div>
             <input type="file" id="photo" accept="image/*" hidden>
             <div class="err" data-for="photo"></div>
           </div>
           <div class="field"><label for="product">1. ¿Qué producto?</label>
-            <div class="chips" id="quick">${QUICK.map((n) => `<button type="button" class="chip" data-p="${n}">${PRODUCTS.find((p) => p.name === n).icon} ${n}</button>`).join('')}</div>
+            <div class="chips" id="quick">${QUICK.map((n) => `<button type="button" class="chip" data-p="${n}">${n}</button>`).join('')}</div>
             <input id="product" name="product" list="plist" value="${v('product')}" placeholder="Escribe o elige arriba" autocomplete="off">
             <datalist id="plist">${PRODUCTS.map((p) => `<option value="${e(p.name)}">`).join('')}</datalist>
             <div class="err" data-for="product"></div>
@@ -139,8 +139,8 @@ export default async function publish({ app, query, state }) {
           <div class="field"><label for="notes">Comentarios</label><textarea id="notes" name="notes" maxlength="400" placeholder="Ej. Ideal para salsa o aguas frescas">${v('notes')}</textarea></div>
         </details>
 
-        <div class="sticky-cta"><button class="btn big" type="submit">🌱 Revisar y publicar</button></div>
-        <button type="button" class="btn ghost" id="saveTpl">⭐ Guardar como plantilla</button>
+        <div class="sticky-cta"><button class="btn big" type="submit"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> Revisar y publicar</button></div>
+        <button type="button" class="btn ghost" id="saveTpl"><svg class="i" aria-hidden="true"><use href="/icons.svg#star"/></svg> Guardar como plantilla</button>
       </form>
       <aside class="aside stack"><div class="calc" id="calc"></div><div><div class="small muted" style="margin-bottom:6px">Así lo verán los compradores:</div><div id="preview"></div></div></aside>
     </div>
@@ -183,7 +183,7 @@ export default async function publish({ app, query, state }) {
     const muni = municipality(d.municipality);
     if (!forecast) {
       shelf = null;
-      box.innerHTML = `<div class="small"><strong>🌡️ Sin datos de clima</strong> <span class="muted">(sin conexión o servicio no disponible). ¿Cómo está el día en ${e(muni?.name || 'tu zona')}?</span></div>
+      box.innerHTML = `<div class="small"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#thermo"/></svg> Sin datos de clima</strong> <span class="muted">(sin conexión o servicio no disponible). ¿Cómo está el día en ${e(muni?.name || 'tu zona')}?</span></div>
         <div class="chips">${MANUAL_CLIMATES.map((c) => `<button type="button" class="chip" data-clima="${c.temp}">${c.label}</button>`).join('')}</div>`;
       return;
     }
@@ -192,13 +192,13 @@ export default async function publish({ app, query, state }) {
       ? `Clima previsto en ${e(muni?.name)}: ${Math.round(Math.min(...forecast.temps.slice(0, 24)))}–${Math.round(Math.max(...forecast.temps.slice(0, 24)))} °C en las próximas 24 h`
       : 'Clima indicado por ti';
     if (!shelf) {
-      box.innerHTML = `<div class="small">🌡️ ${wx}. <span class="muted">Elige producto y estado para estimar su vida útil.</span></div>`;
+      box.innerHTML = `<div class="small"><svg class="i" aria-hidden="true"><use href="/icons.svg#thermo"/></svg> ${wx}. <span class="muted">Elige producto y estado para estimar su vida útil.</span></div>`;
       return;
     }
     const declared = Number(String(d.hours).replace(',', '.'));
     const warn = declared && declared > shelf.high ? `<div class="err" style="color:var(--terra-dark)">Declaraste ${declared} h, más de lo estimado para este clima. Tú decides, pero revisa que aguante.</div>` : '';
     box.innerHTML = `
-      <div class="row between" style="gap:6px"><strong>🌡️ Vida útil estimada: ${shelf.hours >= 168 ? '7 días o más' : `~${shelf.hours} h`}</strong><span class="tiny muted">${shelf.hours >= 168 ? 'máximo publicable: 168 h' : `rango ${shelf.low}–${shelf.high} h`}</span></div>
+      <div class="row between" style="gap:6px"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#thermo"/></svg> Vida útil estimada: ${shelf.hours >= 168 ? '7 días o más' : `~${shelf.hours} h`}</strong><span class="tiny muted">${shelf.hours >= 168 ? 'máximo publicable: 168 h' : `rango ${shelf.low}–${shelf.high} h`}</span></div>
       <div class="small muted">${wx}; promedio ${shelf.temp_mean} °C${shelf.humidity != null ? `, humedad ${shelf.humidity}%` : ''}. ${e(CLASS_LABEL[shelf.cls])} · ${e(qualityLabel(d.quality))}.</div>
       ${shelf.notes.map((n) => `<div class="tiny">• ${e(n)}</div>`).join('')}
       ${warn}
@@ -222,7 +222,7 @@ export default async function publish({ app, query, state }) {
       <dt>Descuento para el comprador</dt><dd>${discountPct(ref, res)}%</dd>
       <dt class="total">Puedes recuperar hasta</dt><dd class="total">${mxn(t.rescueTotal)}</dd></dl>
       <p class="tiny" style="margin:8px 0 0;opacity:.85">Si no lo vendes, se pierde todo. Con el rescate recuperas ${t.refTotal ? Math.round((t.rescueTotal / t.refTotal) * 100) : 0}% de su valor habitual.</p>`
-      : `<p style="margin:0;opacity:.9">${res >= ref && res > 0 ? '⚠️ El precio de rescate debe ser menor al de siempre.' : 'Llena kilos y precios para ver cuánto puedes recuperar.'}</p>`}`;
+      : `<p style="margin:0;opacity:.9">${res >= ref && res > 0 ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> El precio de rescate debe ser menor al de siempre.' : 'Llena kilos y precios para ver cuánto puedes recuperar.'}</p>`}`;
     const hours = Number(d.hours) || 24;
     $('#preview').innerHTML = lotCard({
       id: 0, product: d.product || 'Tu producto', photo, state: hours <= 6 ? 'por_vencer' : 'disponible', discount: ok ? discountPct(ref, res) : 0,
@@ -269,10 +269,10 @@ export default async function publish({ app, query, state }) {
     const secs = start ? Math.round((Date.now() - start) / 1000) : null;
     assistant.destroy();
     app.innerHTML = `<div class="wrap page" style="max-width:560px">
-      <div class="ticket"><div class="ticket-head"><h1>¡Publicado! 🌱</h1><p style="margin:0">${secs ? `Lo hiciste en ${secs} segundos. ` : ''}Ya aparece en el tablero con su temporizador.</p></div>
+      <div class="ticket"><div class="ticket-head"><h1>¡Publicado! <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></h1><p style="margin:0">${secs ? `Lo hiciste en ${secs} segundos. ` : ''}Ya aparece en el tablero con su temporizador.</p></div>
       <div class="ticket-body stack">
         ${lotCard(lot, { owner: true })}
-        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', shareText(lot))}">📤 Compartir en mis grupos de WhatsApp</a>
+        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', shareText(lot))}"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg> Compartir en mis grupos de WhatsApp</a>
         <div class="two"><a class="btn secondary" href="#/productor">Ir a mi panel</a><a class="btn ghost" href="#/publicar?nuevo=${Date.now()}">Publicar otro</a></div>
       </div></div></div>`;
     return lot;
@@ -288,10 +288,10 @@ export default async function publish({ app, query, state }) {
     localStorage.removeItem(DRAFT);
     assistant.destroy();
     app.innerHTML = `<div class="wrap page" style="max-width:640px">
-      <div class="ticket"><div class="ticket-head"><h1>¡${lots.length} ofertas publicadas! 🌱</h1><p style="margin:0">Cada producto tiene su propio temporizador.</p></div>
+      <div class="ticket"><div class="ticket-head"><h1>¡${lots.length} ofertas publicadas! <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></h1><p style="margin:0">Cada producto tiene su propio temporizador.</p></div>
       <div class="ticket-body stack">
         <div class="grid">${lots.map((l) => lotCard(l, { owner: true })).join('')}</div>
-        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', lots.map(shareText).join('\n\n'))}">📤 Compartir todo por WhatsApp</a>
+        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', lots.map(shareText).join('\n\n'))}"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg> Compartir todo por WhatsApp</a>
         <div class="two"><a class="btn secondary" href="#/productor">Ir a mi panel</a><a class="btn ghost" href="#/publicar?nuevo=${Date.now()}">Publicar otro</a></div>
       </div></div></div>`;
     return lots;
@@ -330,10 +330,10 @@ export default async function publish({ app, query, state }) {
   // ---------- Foto: cámara primero, galería como respaldo; mismo formato 4:3 ----------
   function showPhoto() {
     const slot = $('#photoSlot');
-    slot.innerHTML = photo ? `<img src="${photo}" alt="Foto del producto">` : '<span>📷</span><small>Foto real del producto (opcional)</small>';
+    slot.innerHTML = photo ? `<img src="${photo}" alt="Foto del producto">` : '<span><svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg></span><small>Foto real del producto (opcional)</small>';
     slot.classList.toggle('has', !!photo);
     $('#delPhoto').hidden = !photo;
-    $('#camBtn').textContent = photo ? '📷 Tomar otra' : '📷 Tomar foto';
+    $('#camBtn').innerHTML = photo ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg> Tomar otra' : '<svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg> Tomar foto';
     update();
   }
   $('#camBtn').addEventListener('click', async () => {
@@ -405,7 +405,7 @@ export default async function publish({ app, query, state }) {
   toggle.addEventListener('click', () => {
     writeBox.hidden = !writeBox.hidden;
     toggle.setAttribute('aria-expanded', String(!writeBox.hidden));
-    toggle.textContent = writeBox.hidden ? '✍️ ¿Prefieres escribirlo aquí?' : 'Ocultar';
+    toggle.innerHTML = writeBox.hidden ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> ¿Prefieres escribirlo aquí?' : 'Ocultar';
     if (!writeBox.hidden) (syncBlanks(), $('[data-s="kg"]', writeBox).focus());
   });
 
@@ -447,7 +447,7 @@ export default async function publish({ app, query, state }) {
     const { declaration, municipality: _m, ...payload } = get();
     try {
       await api('/api/templates', { method: 'POST', body: { name, payload } });
-      toast('Plantilla guardada ⭐', 'ok');
+      toast('Plantilla guardada <svg class="i" aria-hidden="true"><use href="/icons.svg#star"/></svg>', 'ok');
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -462,7 +462,7 @@ export default async function publish({ app, query, state }) {
     dlg.className = 'card confirm-dlg';
     dlg.innerHTML = `<h2 style="margin:0">¿Publicamos así?</h2>${summaryHtml(d)}
       ${d.declaration ? '' : '<div class="notice danger small">Falta marcar la declaración de que el producto es apto para consumo.</div>'}
-      <div class="two" style="margin-top:10px"><button type="button" class="btn" data-go>✅ Sí, publicar</button><button type="button" class="btn secondary" data-back>✏️ Corregir</button></div>`;
+      <div class="two" style="margin-top:10px"><button type="button" class="btn" data-go><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Sí, publicar</button><button type="button" class="btn secondary" data-back><svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> Corregir</button></div>`;
     document.body.append(dlg);
     dlg.showModal();
     const closeDlg = () => (dlg.close(), dlg.remove());

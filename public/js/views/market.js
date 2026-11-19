@@ -14,10 +14,10 @@ export default async function market({ app, state }) {
   <div class="wrap page stack">
     <div class="row between">
       <div><h1 style="margin:0">Ofertas de rescate</h1><p class="muted" style="margin:0">Primero lo más urgente. Precios por kilo.</p></div>
-      <a class="btn ghost sm" href="#/mapa">🗺️ Ver mapa</a>
+      <a class="btn ghost sm" href="#/mapa"><svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg> Ver mapa</a>
     </div>
     <form id="filters" class="filters" role="search">
-      <div class="full"><label class="sr" for="q">Buscar</label><input id="q" name="q" type="search" placeholder="🔎 Buscar: jitomate, aguacate…" value="${e(f.q)}"></div>
+      <div class="full"><label class="sr" for="q">Buscar</label><input id="q" name="q" type="search" placeholder="Buscar: jitomate, aguacate…" value="${e(f.q)}"></div>
       <div><label class="small" for="from">Estoy en</label><select id="from" name="from">${muniOptions(f.from)}</select></div>
       <div><label class="small" for="radius">Distancia</label><select id="radius" name="radius">
         ${[['', 'Cualquiera'], ['15', '≤ 15 km'], ['30', '≤ 30 km'], ['60', '≤ 60 km'], ['120', '≤ 120 km']].map(([v, l]) => `<option value="${v}" ${f.radius === v ? 'selected' : ''}>${l}</option>`).join('')}
@@ -30,7 +30,7 @@ export default async function market({ app, state }) {
     <div class="chips" id="cats" role="group" aria-label="Categorías">
       <button class="chip ${!f.category ? 'on' : ''}" data-cat="">Todo</button>
       ${CATEGORIES.map((c) => `<button class="chip ${f.category === c.id ? 'on' : ''}" data-cat="${c.id}">${e(c.label)}</button>`).join('')}
-      <button class="chip ${f.urgent === '1' ? 'on' : ''}" data-urgent>⏱ Por vencer</button>
+      <button class="chip ${f.urgent === '1' ? 'on' : ''}" data-urgent><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> Por vencer</button>
       <button class="chip ${f.closed === '1' ? 'on' : ''}" data-closed>Ver agotadas/vencidas</button>
     </div>
     <div id="status" class="small muted" aria-live="polite"></div>
@@ -50,7 +50,7 @@ export default async function market({ app, state }) {
       $('#status').innerHTML = `${open} oferta${open === 1 ? '' : 's'} disponible${open === 1 ? '' : 's'}${data._stale ? ' · <strong>datos guardados sin conexión</strong>' : ''}`;
       list.innerHTML = data.lots.length
         ? data.lots.map((l) => lotCard(l, { owner: state.user && l.producer.id === state.user.id })).join('')
-        : empty('🧺', 'No hay ofertas con esos filtros', 'Prueba con otra distancia o categoría. Las ofertas nuevas aparecen aquí en cuanto se publican.', '<button class="btn secondary" id="clear">Quitar filtros</button>');
+        : empty('<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'No hay ofertas con esos filtros', 'Prueba con otra distancia o categoría. Las ofertas nuevas aparecen aquí en cuanto se publican.', '<button class="btn secondary" id="clear">Quitar filtros</button>');
       $('#clear')?.addEventListener('click', () => {
         Object.assign(f, { q: '', category: '', municipality: '', radius: '', max_price: '', urgent: '' });
         localStorage.setItem(KEY, JSON.stringify(f));

@@ -15,11 +15,21 @@ export default async function landing({ app, state }) {
       <span class="mono-tag">Rescate de perecederos · Michoacán</span>
       <h1>Del campo a tu negocio, <span class="accent">sin desperdicio.</span></h1>
       <p class="lede">Fruta y verdura buena a la que le quedan horas, no calidad. Se publica en un minuto, se aparta al instante y se recoge cerca.</p>
-      ${u ? `<a class="btn big" href="${home}" style="max-width:360px">Ir a mi panel →</a>` : `
+      ${feed[0] ? `<a class="promo" href="#/oferta/${feed[0].id}" style="text-decoration:none">
+        <div><span class="mono-tag" style="background:rgba(255,255,255,.14);color:#fff">Urgente · −${Math.round(feed[0].discount)}%</span>
+          <h2 style="margin-top:10px">${e(feed[0].product)} a ${mxn(feed[0].rescue_price_c)}/kg</h2>
+          <p class="small" style="margin:0 0 12px">${kg(feed[0].available_g)} en ${e(feed[0].municipality_name)}</p>
+          <span class="btn sm">Apartar</span></div>
+        <div class="lot-media" style="margin:0;border-radius:20px">${media(feed[0].photo, feed[0].product)}</div>
+      </a>` : ''}
+      <div class="cat-tiles">
+        ${[['', 'grid', 'Todo'], ['fruta', 'fruit', 'Fruta'], ['verdura', 'carrot', 'Verdura'], ['tuberculo', 'tuber', 'Tubérculo'], ['hortaliza', 'lettuce', 'Hoja']].map(([c, i, l]) => `<a class="cat-tile" href="#/ofertas" data-cat="${c}"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#${i}"/></svg></span>${l}</a>`).join('')}
+      </div>
+      ${u ? `<a class="btn big" href="${home}" style="max-width:360px">Ir a mi panel</a>` : `
       <div class="role-cards">
-        <a class="role-card" href="#/registro?rol=productor"><div class="ico">🌱</div><strong>Vendo</strong><span class="small muted">Publica por voz o con foto. Recupera lo que ibas a perder.</span></a>
-        <a class="role-card" href="#/ofertas"><div class="ico">🍽️</div><strong>Compro</strong><span class="small muted">Fondas, fruterías y comedores: aparta con descuento.</span></a>
-        <a class="role-card" href="#/registro?rol=transportista"><div class="ico">🚚</div><strong>Transporto</strong><span class="small muted">Toma fletes cortos en tu zona y cobra directo.</span></a>
+        <a class="role-card" href="#/registro?rol=productor"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></div><strong>Vendo</strong><span class="small muted">Publica por voz o con foto. Recupera lo que ibas a perder.</span></a>
+        <a class="role-card" href="#/ofertas"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg></div><strong>Compro</strong><span class="small muted">Fondas, fruterías y comedores: aparta con descuento.</span></a>
+        <a class="role-card" href="#/registro?rol=transportista"><div class="ico"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg></div><strong>Transporto</strong><span class="small muted">Toma fletes cortos en tu zona y cobra directo.</span></a>
       </div>`}
     </div>
   </section>
@@ -60,4 +70,9 @@ export default async function landing({ app, state }) {
     <strong>Raíz Directa</strong> · Prototipo HackPony 2026 · Reto 03 Campo y Alimentos · Instituto Tecnológico de Morelia.<br>
     Datos de demostración ficticios. <a href="#/privacidad">Privacidad</a> · <a href="#/creditos">Créditos</a>
   </div></footer>`;
+  // Las categorías abren el tablero ya filtrado
+  app.querySelectorAll('.cat-tile').forEach((a) => a.addEventListener('click', () => {
+    const f = JSON.parse(localStorage.getItem('rd_filters') || '{}');
+    localStorage.setItem('rd_filters', JSON.stringify({ ...f, category: a.dataset.cat }));
+  }));
 }

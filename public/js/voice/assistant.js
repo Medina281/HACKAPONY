@@ -2,7 +2,7 @@
 // · Un dictado puede traer varios productos ("jitomate y cebolla") → se publican como lotes separados.
 // · Lo que falte se pide en UNA sola tarjeta por producto (menos preguntas, menos tiempo).
 // · No inventa datos y nunca publica sin confirmación explícita.
-import { $, e, toast, mxn } from '../ui.js';
+import { $, e, toast, mxn, stripIcons } from '../ui.js';
 import { parseMulti, parseSpoken, resolvePacks, VAGUE_LABEL } from '../shared/parse.js';
 import { QUALITY, PRODUCTS, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, kgToGrams, pesosToCents, discountPct } from '../shared/calc.js';
@@ -34,23 +34,23 @@ export function mountAssistant(ctx) {
     <div class="va-panel">
       <header class="va-head">
         <button class="va-icon" data-x aria-label="Cerrar asistente">←</button>
-        <div class="va-avatar" aria-hidden="true">🌱</div>
+        <div class="va-avatar" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg></div>
         <div class="grow"><strong>Asistente Raíz Directa</strong><div class="tiny" id="vaStatus">te ayudo a publicar</div></div>
-        <button class="va-icon" id="vaMute" aria-label="Activar o silenciar la voz del asistente" ${canSpeak ? '' : 'hidden'}>${st.mute ? '🔇' : '🔊'}</button>
+        <button class="va-icon" id="vaMute" aria-label="Activar o silenciar la voz del asistente" ${canSpeak ? '' : 'hidden'}>${st.mute ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#mute"/></svg>' : '<svg class="i" aria-hidden="true"><use href="/icons.svg#volume"/></svg>'}</button>
       </header>
       <div class="va-msgs" id="vaMsgs" aria-live="polite"></div>
       <div class="va-chips" id="vaChips"></div>
       <div class="va-composer" id="vaComposer">
         <input id="vaText" placeholder="Escribe un mensaje" autocomplete="off" aria-label="Escribe tu respuesta">
-        <button class="va-round" id="vaSend" aria-label="Enviar" hidden>➤</button>
-        <button class="va-round" id="vaMic" aria-label="Mantén presionado para hablar; toca para grabar sin sostener" ${canRecognize ? '' : 'hidden'}>🎤</button>
+        <button class="va-round" id="vaSend" aria-label="Enviar" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
+        <button class="va-round" id="vaMic" aria-label="Mantén presionado para hablar; toca para grabar sin sostener" ${canRecognize ? '' : 'hidden'}><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></button>
       </div>
       <div class="va-recbar" id="vaRec" hidden>
-        <button class="va-icon" id="vaCancel" aria-label="Cancelar grabación">🗑️</button>
+        <button class="va-icon" id="vaCancel" aria-label="Cancelar grabación"><svg class="i" aria-hidden="true"><use href="/icons.svg#trash"/></svg></button>
         <span class="va-dot" aria-hidden="true"></span><span id="vaTime">0:00</span>
         <span class="va-wave" aria-hidden="true">${'<i></i>'.repeat(14)}</span>
         <span class="tiny muted va-slide">◀ desliza para cancelar</span>
-        <button class="va-round" id="vaStop" aria-label="Terminar y enviar">➤</button>
+        <button class="va-round" id="vaStop" aria-label="Terminar y enviar"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg></button>
       </div>
     </div>`;
   document.body.append(root);
@@ -72,13 +72,13 @@ export function mountAssistant(ctx) {
   function me(value, { voice, secs } = {}) {
     const b = document.createElement('div');
     b.className = 'va-msg me';
-    b.innerHTML = `${voice ? `<div class="va-note">🎤 ${secs}s · nota de voz transcrita</div>` : ''}<span class="va-t">${e(value)}</span><span class="va-check">✓✓</span>`;
+    b.innerHTML = `${voice ? `<div class="va-note"><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg> ${secs}s · nota de voz transcrita</div>` : ''}<span class="va-t">${e(value)}</span><span class="va-check">✓✓</span>`;
     msgs.append(b);
     msgs.scrollTop = msgs.scrollHeight;
     return b;
   }
   function setChips(list = []) {
-    chips.innerHTML = list.map((c, i) => `<button type="button" class="chip" data-i="${i}">${e(c.label)}</button>`).join('');
+    chips.innerHTML = list.map((c, i) => `<button type="button" class="chip" data-i="${i}">${e(stripIcons(c.label))}</button>`).join('');
     chips.onclick = (ev) => {
       const b = ev.target.closest('[data-i]');
       if (b) list[Number(b.dataset.i)].run();
@@ -105,7 +105,7 @@ export function mountAssistant(ctx) {
   }
 
   function applyTo(dr, r) {
-    if (r.unsafe) bot('⚠️ Si está podrido o no es apto para consumo, <strong>no se puede publicar</strong> como alimento.', 'Si está podrido o no es apto, no se puede publicar como alimento.');
+    if (r.unsafe) bot('<svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> Si está podrido o no es apto para consumo, <strong>no se puede publicar</strong> como alimento.', 'Si está podrido o no es apto, no se puede publicar como alimento.');
     const set = (k, v) => v != null && dr.set(k, v);
     set('product', r.product);
     if (r.product) dr.autoCategory();
@@ -149,9 +149,9 @@ export function mountAssistant(ctx) {
     const prefix = multi() ? `Producto ${st.cur + 1} de ${st.items.length} — ` : '';
     const vague = dr.meta.vague ? ` Dijiste “${e(VAGUE_LABEL[dr.meta.vague] || dr.meta.vague)}”; dime un número de horas.` : '';
     const field = (k) => {
-      if (k === 'product') return `<div class="mf"><span>${LABEL[k]}</span><div class="chips">${QUICK.map((n) => `<button type="button" class="chip" data-set="product" data-v="${n}">${PRODUCTS.find((p) => p.name === n).icon} ${n}</button>`).join('')}</div><input data-in="product" list="plist" placeholder="Otro producto"></div>`;
+      if (k === 'product') return `<div class="mf"><span>${LABEL[k]}</span><div class="chips">${QUICK.map((n) => `<button type="button" class="chip" data-set="product" data-v="${n}">${n}</button>`).join('')}</div><input data-in="product" list="plist" placeholder="Otro producto"></div>`;
       if (k === 'quality') return `<div class="mf"><span>${LABEL[k]}</span><div class="chips">${QUALITY.map((q) => `<button type="button" class="chip" data-set="quality" data-v="${q.id}">${e(q.label)}</button>`).join('')}</div></div>`;
-      if (k === 'hours') return `<div class="mf"><span>${LABEL[k]}</span><div class="chips">${shelf ? `<button type="button" class="chip" data-set="hours" data-v="${shelf.hours}">🌡️ ~${shelf.hours} h por clima</button>` : ''}${[12, 24, 48].map((h) => `<button type="button" class="chip" data-set="hours" data-v="${h}">${h} h</button>`).join('')}</div><input data-in="hours" inputmode="decimal" placeholder="o escribe las horas"></div>`;
+      if (k === 'hours') return `<div class="mf"><span>${LABEL[k]}</span><div class="chips">${shelf ? `<button type="button" class="chip" data-set="hours" data-v="${shelf.hours}"><svg class="i" aria-hidden="true"><use href="/icons.svg#thermo"/></svg> ~${shelf.hours} h por clima</button>` : ''}${[12, 24, 48].map((h) => `<button type="button" class="chip" data-set="hours" data-v="${h}">${h} h</button>`).join('')}</div><input data-in="hours" inputmode="decimal" placeholder="o escribe las horas"></div>`;
       if (k === 'pack_kg') return `<div class="mf"><span>¿Cuántos kilos pesa cada ${e(dr.meta.pack_unit || 'empaque')}?</span><input data-in="pack_kg" inputmode="decimal" placeholder="kg"></div>`;
       const sug = k === 'rescue_price' && num(d.ref_price) ? [30, 40, 50].map((p) => { const v = Math.round(num(d.ref_price) * (1 - p / 100) * 2) / 2; return `<button type="button" class="chip" data-set="rescue_price" data-v="${v}">$${v} (−${p}%)</button>`; }).join('') : '';
       return `<div class="mf"><span>${LABEL[k]}</span>${sug ? `<div class="chips">${sug}</div>` : ''}<input data-in="${k}" inputmode="decimal" placeholder="${k === 'kg' ? '100' : '$'}"></div>`;
@@ -274,10 +274,10 @@ export function mountAssistant(ctx) {
     }).join('');
     const muni = municipality(list[0].get().municipality);
     const b = bot(`<strong>Revisa antes de publicar${multi() ? ` (${list.length} ofertas)` : ''}:</strong>${rows}
-      ${multi() && ctx.hasPhoto?.() ? `<div class="tiny muted">📷 Tu foto se usará para ${e(nameOf(list[0]))}.</div>` : ''}
+      ${multi() && ctx.hasPhoto?.() ? `<div class="tiny muted"><svg class="i" aria-hidden="true"><use href="/icons.svg#camera"/></svg> Tu foto se usará para ${e(nameOf(list[0]))}.</div>` : ''}
       ${multi() ? `<div class="small" style="margin-top:6px">Zona: ${e(muni?.name || '')} · Total que puedes recuperar: <strong>${mxn(totalRes)}</strong> <span class="muted">(valor habitual ${mxn(totalRef)})</span></div>` : ''}
       <label class="inline-check va-decl"><input type="checkbox" data-decl ${form.get().declaration ? 'checked' : ''}><span>Declaro que ${multi() ? 'todos son' : 'es'} <strong>aptos para consumo humano</strong> y la información es verdadera.</span></label>
-      <div class="two" style="margin-top:10px"><button type="button" class="btn" data-pub>✅ Publicar</button><button type="button" class="btn secondary" data-fix>✏️ Corregir</button></div>`,
+      <div class="two" style="margin-top:10px"><button type="button" class="btn" data-pub><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Publicar</button><button type="button" class="btn secondary" data-fix><svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> Corregir</button></div>`,
       multi() ? `Vas a publicar ${list.length} productos: ${list.map(nameOf).join(' y ')}. Revisa y confirma.` : `Vas a publicar ${list[0].get().kg} kilos de ${list[0].get().product} a ${list[0].get().rescue_price} pesos el kilo. Revisa y confirma.`);
     $('[data-decl]', b).addEventListener('change', (ev) => form.set('declaration', ev.target.checked));
     $('[data-fix]', b).addEventListener('click', fixMenu);
@@ -293,7 +293,7 @@ export function mountAssistant(ctx) {
         close();
       } catch (err) {
         ev.target.disabled = false;
-        ev.target.textContent = '✅ Publicar';
+        ev.target.innerHTML = '<svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Publicar';
         bot(`No se pudo publicar: ${e(err.message)}`, `No se pudo publicar. ${err.message}`);
         const f = Object.keys(err.fields || {}).find((k) => LABEL[k]);
         if (f) {
@@ -303,7 +303,7 @@ export function mountAssistant(ctx) {
         }
       }
     });
-    setChips([{ label: '✏️ Corregir algo', run: fixMenu }]);
+    setChips([{ label: '<svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> Corregir algo', run: fixMenu }]);
   }
 
   function fixMenu() {
@@ -315,7 +315,7 @@ export function mountAssistant(ctx) {
       }
       if (multi()) opts.push({ label: `Quitar ${nameOf(dr)}`, run: () => removeItem(i) });
     });
-    if (!multi()) opts.push({ label: '📝 Ver formulario', run: () => { close(); ctx.showForm(); } });
+    if (!multi()) opts.push({ label: '<svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> Ver formulario', run: () => { close(); ctx.showForm(); } });
     setChips(opts);
   }
 
@@ -404,7 +404,7 @@ export function mountAssistant(ctx) {
   $('#vaCancel', root).addEventListener('click', () => stopRec(false));
 
   function explainMic() {
-    const b = bot(`<strong>🎙️ Antes de usar el micrófono</strong>
+    const b = bot(`<strong><svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg> Antes de usar el micrófono</strong>
       <ul class="small" style="margin:6px 0;padding-left:18px">
         <li>Tu teléfono te pedirá permiso para usar el micrófono.</li>
         <li>El dictado lo hace tu navegador; en Chrome la voz se procesa en servidores de Google.</li>
@@ -413,7 +413,7 @@ export function mountAssistant(ctx) {
       </ul>
       <div class="two"><button type="button" class="btn sm" data-ok>Entendido</button><button type="button" class="btn ghost sm" data-no>Mejor escribo</button></div>`,
       'Antes de usar el micrófono: no guardamos tu audio y nada se publica sin tu confirmación.');
-    $('[data-ok]', b).addEventListener('click', () => { localStorage.setItem(MIC_OK, '1'); b.querySelector('.two').remove(); bot('Listo. <strong>Mantén presionado 🎤</strong> y suelta para enviar, o tócalo una vez y luego ➤.'); });
+    $('[data-ok]', b).addEventListener('click', () => { localStorage.setItem(MIC_OK, '1'); b.querySelector('.two').remove(); bot('Listo. <strong>Mantén presionado <svg class="i" aria-hidden="true"><use href="/icons.svg#mic"/></svg></strong> y suelta para enviar, o tócalo una vez y luego <svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg>.'); });
     $('[data-no]', b).addEventListener('click', () => { b.querySelector('.two').remove(); text.focus(); });
   }
 
@@ -427,7 +427,7 @@ export function mountAssistant(ctx) {
   $('#vaMute', root).addEventListener('click', (ev) => {
     st.mute = !st.mute;
     localStorage.setItem(MUTE, st.mute ? '1' : '0');
-    ev.currentTarget.textContent = st.mute ? '🔇' : '🔊';
+    ev.currentTarget.innerHTML = st.mute ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#mute"/></svg>' : '<svg class="i" aria-hidden="true"><use href="/icons.svg#volume"/></svg>';
     if (st.mute) stopSpeaking();
   });
   root.querySelector('[data-x]').addEventListener('click', () => close());
@@ -438,8 +438,8 @@ export function mountAssistant(ctx) {
     if (!msgs.children.length) {
       const muni = municipality(form.get().municipality || user.municipality);
       bot(canRecognize
-        ? `Hola, ${e(user.name.split(' ')[0])} 👋 Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 12, normalmente 25, y 50 de cebolla a 8…”</em>`
-        : `Hola, ${e(user.name.split(' ')[0])} 👋 Este navegador no permite dictar; <strong>escríbeme</strong> como en WhatsApp, también varios productos a la vez.`,
+        ? `Hola, ${e(user.name.split(' ')[0])} Dime qué vendes, como en un mensaje de voz. Puedes decir varios productos: <em>“100 kilos de jitomate a 12, normalmente 25, y 50 de cebolla a 8…”</em>`
+        : `Hola, ${e(user.name.split(' ')[0])} Este navegador no permite dictar; <strong>escríbeme</strong> como en WhatsApp, también varios productos a la vez.`,
         canRecognize ? 'Hola. Dime qué quieres vender.' : '');
       bot(`<span class="tiny muted">Zona: ${e(muni?.name || '')} (de tu perfil; puedes decir otra).</span>`);
     }

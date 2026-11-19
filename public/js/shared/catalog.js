@@ -8,31 +8,33 @@ export const CATEGORIES = [
   { id: 'otro', label: 'Otro' },
 ];
 
-// Íconos: emoji para reconocimiento inmediato sin depender de imágenes pesadas.
+// Íconos de línea por tipo de producto (sin emojis).
 export const PRODUCTS = [
-  { name: 'Jitomate', category: 'verdura', icon: '🍅', alias: ['jitomates', 'tomate rojo', 'tomates'] },
-  { name: 'Aguacate', category: 'fruta', icon: '🥑', alias: ['aguacates'] },
-  { name: 'Fresa', category: 'fruta', icon: '🍓', alias: ['fresas'] },
-  { name: 'Guayaba', category: 'fruta', icon: '🧺', alias: ['guayabas'] },
-  { name: 'Limón', category: 'fruta', icon: '🍋', alias: ['limon', 'limones'] },
-  { name: 'Mango', category: 'fruta', icon: '🥭', alias: ['mangos'] },
-  { name: 'Calabacita', category: 'verdura', icon: '🥒', alias: ['calabacitas', 'calabaza'] },
-  { name: 'Cebolla', category: 'verdura', icon: '🧅', alias: ['cebollas'] },
-  { name: 'Papa', category: 'tuberculo', icon: '🥔', alias: ['papas'] },
-  { name: 'Plátano', category: 'fruta', icon: '🍌', alias: ['platano', 'platanos', 'plátanos'] },
-  { name: 'Chile', category: 'verdura', icon: '🌶️', alias: ['chiles', 'chile serrano', 'chile jalapeño'] },
-  { name: 'Zanahoria', category: 'tuberculo', icon: '🥕', alias: ['zanahorias'] },
-  { name: 'Elote', category: 'verdura', icon: '🌽', alias: ['elotes'] },
-  { name: 'Brócoli', category: 'hortaliza', icon: '🥦', alias: ['brocoli'] },
-  { name: 'Lechuga', category: 'hortaliza', icon: '🥬', alias: ['lechugas'] },
-  { name: 'Naranja', category: 'fruta', icon: '🍊', alias: ['naranjas'] },
+  { name: 'Jitomate', category: 'verdura', icon: 'fruit', alias: ['jitomates', 'tomate rojo', 'tomates'] },
+  { name: 'Aguacate', category: 'fruta', icon: 'fruit', alias: ['aguacates'] },
+  { name: 'Fresa', category: 'fruta', icon: 'fruit', alias: ['fresas'] },
+  { name: 'Guayaba', category: 'fruta', icon: 'fruit', alias: ['guayabas'] },
+  { name: 'Limón', category: 'fruta', icon: 'fruit', alias: ['limon', 'limones'] },
+  { name: 'Mango', category: 'fruta', icon: 'fruit', alias: ['mangos'] },
+  { name: 'Calabacita', category: 'verdura', icon: 'carrot', alias: ['calabacitas', 'calabaza'] },
+  { name: 'Cebolla', category: 'verdura', icon: 'tuber', alias: ['cebollas'] },
+  { name: 'Papa', category: 'tuberculo', icon: 'tuber', alias: ['papas'] },
+  { name: 'Plátano', category: 'fruta', icon: 'fruit', alias: ['platano', 'platanos', 'plátanos'] },
+  { name: 'Chile', category: 'verdura', icon: 'carrot', alias: ['chiles', 'chile serrano', 'chile jalapeño'] },
+  { name: 'Zanahoria', category: 'tuberculo', icon: 'carrot', alias: ['zanahorias'] },
+  { name: 'Elote', category: 'verdura', icon: 'carrot', alias: ['elotes'] },
+  { name: 'Brócoli', category: 'hortaliza', icon: 'lettuce', alias: ['brocoli'] },
+  { name: 'Lechuga', category: 'hortaliza', icon: 'lettuce', alias: ['lechugas'] },
+  { name: 'Naranja', category: 'fruta', icon: 'fruit', alias: ['naranjas'] },
 ];
 
-export const productIcon = (name) => {
+export const productIconName = (name) => {
   const n = normalize(name || '');
   const p = PRODUCTS.find((x) => normalize(x.name) === n || x.alias.some((a) => normalize(a) === n));
-  return p ? p.icon : '🧺';
+  return p ? p.icon : 'basket';
 };
+/** Ícono de línea según el tipo de producto (sprite /icons.svg). */
+export const productIcon = (name) => `<svg class="i prod" aria-hidden="true"><use href="/icons.svg#${productIconName(name)}"/></svg>`;
 
 // Cabeceras municipales (coordenadas aproximadas del centro de la cabecera; sirven
 // sólo para distancias en línea recta y para no exponer la ubicación exacta del productor).

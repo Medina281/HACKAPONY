@@ -38,10 +38,10 @@ export default async function impact({ app, query }) {
     <div class="card stack">
       <h2>¿Qué pasó con lo publicado?</h2>
       <div class="funnel" role="img" aria-label="Distribución de kilos publicados">
-        ${seg(s.collected_g, '#244A36', 'Recolectado')}${seg(s.reserved_g, '#72935B', 'Apartado')}${seg(s.available_g, '#C88852', 'Disponible')}${seg(s.expired_unsold_g, '#a63d2f', 'Vencido sin venta')}
+        ${seg(s.collected_g, '#1F4A34', 'Recolectado')}${seg(s.reserved_g, '#7FB08F', 'Apartado')}${seg(s.available_g, '#D9A441', 'Disponible')}${seg(s.expired_unsold_g, '#B4473A', 'Vencido sin venta')}
       </div>
       <div class="row small">
-        <span>🟩 Recolectado ${kg(s.collected_g)}</span><span>🟢 Apartado ${kg(s.reserved_g)}</span><span>🟧 Disponible ${kg(s.available_g)}</span><span>🟥 Vencido sin venta ${kg(s.expired_unsold_g)}</span>
+        <span><i class="sw" style="background:#1F4A34"></i>Recolectado ${kg(s.collected_g)}</span><span><i class="sw" style="background:#7FB08F"></i>Apartado ${kg(s.reserved_g)}</span><span><i class="sw" style="background:#D9A441"></i>Disponible ${kg(s.available_g)}</span><span><i class="sw" style="background:#B4473A"></i>Vencido sin venta ${kg(s.expired_unsold_g)}</span>
       </div>
       <p class="tiny muted">El resto corresponde a ofertas retiradas o inventario que el productor vendió por otro canal. Publicado ≠ rescatado: sólo contamos como rescatado lo entregado y confirmado.</p>
     </div>

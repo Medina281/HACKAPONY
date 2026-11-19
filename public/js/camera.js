@@ -42,12 +42,12 @@ export async function takePhoto() {
     const ov = document.createElement('div');
     ov.className = 'cam';
     ov.innerHTML = `
-      <div class="cam-top"><button type="button" class="cam-x" aria-label="Cerrar cámara">✕</button><span>Encuadra el producto dentro del marco</span></div>
+      <div class="cam-top"><button type="button" class="cam-x" aria-label="Cerrar cámara"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg></button><span>Encuadra el producto dentro del marco</span></div>
       <div class="cam-view"><video playsinline autoplay muted></video><div class="cam-frame" aria-hidden="true"></div></div>
       <div class="cam-bar">
-        <button type="button" class="cam-alt" data-retry hidden>↺ Repetir</button>
+        <button type="button" class="cam-alt" data-retry hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#refresh"/></svg> Repetir</button>
         <button type="button" class="cam-shot" aria-label="Tomar foto"></button>
-        <button type="button" class="cam-alt" data-use hidden>✓ Usar</button>
+        <button type="button" class="cam-alt" data-use hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> Usar</button>
       </div>`;
     document.body.append(ov);
     const video = ov.querySelector('video');

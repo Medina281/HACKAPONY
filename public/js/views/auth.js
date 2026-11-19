@@ -50,7 +50,7 @@ function login(app) {
     btn.textContent = 'Entrando…';
     try {
       const { user } = await api('/api/auth/login', { method: 'POST', body: { identifier: f.identifier.value, password: f.password.value } });
-      toast(`Hola, ${user.name.split(' ')[0]} 👋`, 'ok');
+      toast(`Hola, ${user.name.split(' ')[0]}`, 'ok');
       afterLogin(user);
     } catch (err) {
       $('#msg').textContent = err.message;
@@ -68,9 +68,9 @@ function register(app, role) {
     <form id="f" class="card" novalidate>
       <div class="field"><label>¿Qué vas a hacer?</label>
         <div class="seg" role="radiogroup">
-          <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}">🌱 Vendo</button>
-          <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}">🍽️ Compro</button>
-          <button type="button" data-role="transportista" class="${role === 'transportista' ? 'on' : ''}">🚚 Transporto</button>
+          <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> Vendo</button>
+          <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg> Compro</button>
+          <button type="button" data-role="transportista" class="${role === 'transportista' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Transporto</button>
         </div>
         <div class="err" data-for="role"></div>
       </div>
@@ -124,7 +124,7 @@ function register(app, role) {
     btn.disabled = true;
     try {
       const { user } = await api('/api/auth/register', { method: 'POST', body });
-      toast('¡Cuenta creada! 🌱', 'ok');
+      toast('¡Cuenta creada! <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg>', 'ok');
       afterLogin(user);
     } catch (err) {
       fieldErrors(f, err.fields);

@@ -27,7 +27,7 @@ export default async function lotView({ app, params, state }) {
           <div class="lot-body">
             <div class="row between"><h1 style="margin:0">${e(l.product)}</h1>${l.is_demo ? '<span class="pill demo">dato de demostración</span>' : ''}</div>
             <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans)">/kg</span><s>${mxn(l.ref_price_c)} ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'}</s></div>
-            <div class="row"><span>⏱ Frescura comercial estimada:</span> ${timer(l.expires_at)}</div>
+            <div class="row"><span><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> Frescura comercial estimada:</span> ${timer(l.expires_at)}</div>
             <div id="mkt" class="sniim"></div>
             <dl class="kv">
               <dt>Disponible</dt><dd>${kg(l.available_g)} de ${kg(l.total_g)}</dd>
@@ -37,11 +37,11 @@ export default async function lotView({ app, params, state }) {
               <dt>Zona</dt><dd>${e(l.municipality_name)} <span class="muted small">(punto exacto al apartar)</span></dd>
               <dt>Distancia</dt><dd>~${straight} km en línea recta desde ${e(from.name)} <span class="muted small">(≈${road} km por carretera, estimado)</span></dd>
               ${l.pickup_window ? `<dt>Horario</dt><dd>${e(l.pickup_window)}</dd>` : ''}
-              <dt>Transporte</dt><dd>${l.producer_transport ? '🚚 El productor puede llevarlo (acordar costo)' : 'Recoge el comprador'}</dd>
+              <dt>Transporte</dt><dd>${l.producer_transport ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> El productor puede llevarlo (acordar costo)' : 'Recoge el comprador'}</dd>
               ${isOwner && l.pickup_point ? `<dt>Punto de recolección</dt><dd>${e(l.pickup_point)}</dd>` : ''}
             </dl>
             ${l.notes ? `<p class="card" style="background:var(--cream)">“${e(l.notes)}”</p>` : ''}
-            ${straight > 40 ? `<div class="notice">⚠️ Está a más de 40 km en línea recta. Revisa el costo de traslado abajo antes de apartar.</div>` : ''}
+            ${straight > 40 ? `<div class="notice"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> Está a más de 40 km en línea recta. Revisa el costo de traslado abajo antes de apartar.</div>` : ''}
             <p class="tiny muted">El productor declaró que el producto es apto para consumo humano. El temporizador es una estimación comercial y no certifica la inocuidad del alimento. Revisa el producto al recogerlo.</p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default async function lotView({ app, params, state }) {
         <div class="hint">Tolerancia de 3 horas. Si no se recoge, el apartado vence y el producto se libera.</div>
       </div>
       <div class="calc" id="calc" aria-live="polite"></div>
-      <details class="more"><summary>🚗 ¿Me conviene por el traslado?</summary>
+      <details class="more"><summary><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> ¿Me conviene por el traslado?</summary>
         <div class="two" style="margin-top:10px">
           <div class="field"><label class="small" for="dist">Km por carretera (ida)</label><input id="dist" inputmode="decimal" value="${road}"></div>
           <div class="field"><label class="small" for="kml">Rendimiento km/l</label><input id="kml" inputmode="decimal" value="${transport.kmPerLiter}"></div>
@@ -106,9 +106,9 @@ export default async function lotView({ app, params, state }) {
     </form>
     <div class="card stack">
       <h3>Compartir o preguntar</h3>
-      <a class="btn wa block" target="_blank" rel="noopener" href="${waLink('', shareText(l))}">📤 Compartir oferta por WhatsApp</a>
-      ${l.producer.phone ? `<a class="btn ghost block" target="_blank" rel="noopener" href="${waLink(l.producer.phone, `Hola, vi su oferta de ${l.product} en Raíz Directa (${kg(l.available_g)} a ${mxn(l.rescue_price_c)}/kg). ¿Sigue disponible?`)}">💬 Preguntar disponibilidad</a>` : '<p class="tiny muted">El WhatsApp del productor se muestra a comercios registrados.</p>'}
-      ${user ? '<button class="btn ghost sm" id="report">🚩 Reportar publicación</button>' : ''}
+      <a class="btn wa block" target="_blank" rel="noopener" href="${waLink('', shareText(l))}"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg> Compartir oferta por WhatsApp</a>
+      ${l.producer.phone ? `<a class="btn ghost block" target="_blank" rel="noopener" href="${waLink(l.producer.phone, `Hola, vi su oferta de ${l.product} en Raíz Directa (${kg(l.available_g)} a ${mxn(l.rescue_price_c)}/kg). ¿Sigue disponible?`)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> Preguntar disponibilidad</a>` : '<p class="tiny muted">El WhatsApp del productor se muestra a comercios registrados.</p>'}
+      ${user ? '<button class="btn ghost sm" id="report"><svg class="i" aria-hidden="true"><use href="/icons.svg#flag"/></svg> Reportar publicación</button>' : ''}
     </div>` : `
     <div class="card stack">
       <h2>${l.state === 'agotado' ? 'Ya se apartó todo' : 'Esta oferta ya no está disponible'}</h2>
@@ -205,7 +205,7 @@ async function ownerPanel(side, l, app, state) {
   const alive = ['disponible', 'por_vencer', 'agotado'].includes(l.state);
   side.innerHTML = `
     ${l.suggestion ? `<div class="card stack" style="border-color:var(--terra)">
-      <h3>💡 Sugerencia de precio</h3>
+      <h3><svg class="i" aria-hidden="true"><use href="/icons.svg#bulb"/></svg> Sugerencia de precio</h3>
       <p class="small">${e(l.suggestion.reason)} Bajar a <strong>${mxn(l.suggestion.price_c)}/kg</strong> (${l.suggestion.discount}% de descuento) podría ayudar a moverlo.</p>
       <p class="tiny muted">Regla simple basada en tiempo transcurrido y kilos sin apartar. Tú decides; nada cambia sin tu autorización.</p>
       <button class="btn terra" id="apply">Aplicar ${mxn(l.suggestion.price_c)}/kg</button>
@@ -227,10 +227,10 @@ async function ownerPanel(side, l, app, state) {
     </form>` : ''}
     <div class="card stack">
       <h3>Acciones</h3>
-      <a class="btn wa block" target="_blank" rel="noopener" href="${waLink('', shareText(l))}">📤 Compartir por WhatsApp</a>
-      ${state.user.role === 'productor' ? `<a class="btn secondary block" href="#/publicar?from=${l.id}">♻️ Publicar de nuevo (reutilizar)</a>` : ''}
-      ${alive && l.state !== 'pausado' ? '<button class="btn ghost block" data-status="pausado">⏸ Pausar</button>' : ''}
-      ${l.state === 'pausado' ? '<button class="btn ghost block" data-status="activo">▶️ Reactivar</button>' : ''}
+      <a class="btn wa block" target="_blank" rel="noopener" href="${waLink('', shareText(l))}"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg> Compartir por WhatsApp</a>
+      ${state.user.role === 'productor' ? `<a class="btn secondary block" href="#/publicar?from=${l.id}"><svg class="i" aria-hidden="true"><use href="/icons.svg#repeat"/></svg> Publicar de nuevo (reutilizar)</a>` : ''}
+      ${alive && l.state !== 'pausado' ? '<button class="btn ghost block" data-status="pausado"><svg class="i" aria-hidden="true"><use href="/icons.svg#pause"/></svg> Pausar</button>' : ''}
+      ${l.state === 'pausado' ? '<button class="btn ghost block" data-status="activo"><svg class="i" aria-hidden="true"><use href="/icons.svg#play"/></svg> Reactivar</button>' : ''}
       ${l.state !== 'retirado' ? '<button class="btn danger block" data-status="retirado">Retirar oferta</button>' : ''}
       <p class="tiny muted">Retirar no cancela pedidos ya apartados.</p>
     </div>`;

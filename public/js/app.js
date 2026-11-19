@@ -28,11 +28,11 @@ export const onLeave = (fn) => cleanups.push(fn);
 export const go = (hash) => (location.hash = hash);
 
 const NAV = {
-  guest: [['#/ofertas', '🧺', 'Ofertas'], ['#/mapa', '🗺️', 'Mapa'], ['#/impacto', '📊', 'Impacto'], ['#/entrar', '👤', 'Entrar']],
-  productor: [['#/productor', '🏠', 'Inicio'], ['#/productor/pedidos', '📦', 'Pedidos'], ['#/publicar', '＋', 'Publicar', true], ['#/ofertas', '🧺', 'Ofertas'], ['#/perfil', '👤', 'Perfil']],
-  comprador: [['#/ofertas', '🧺', 'Ofertas'], ['#/mapa', '🗺️', 'Mapa'], ['#/comprador', '📦', 'Pedidos'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
-  transportista: [['#/transportista', '🚚', 'Viajes'], ['#/transportista?tab=mios', '🧭', 'Mis viajes'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
-  admin: [['#/admin', '🛡️', 'Admin'], ['#/ofertas', '🧺', 'Ofertas'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
+  guest: [['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/mapa', '<svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg>', 'Mapa'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/entrar', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Entrar']],
+  productor: [['#/productor', '<svg class="i" aria-hidden="true"><use href="/icons.svg#home"/></svg>', 'Inicio'], ['#/productor/pedidos', '<svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg>', 'Pedidos'], ['#/publicar', '<svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg>', 'Publicar', true], ['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
+  comprador: [['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/mapa', '<svg class="i" aria-hidden="true"><use href="/icons.svg#map"/></svg>', 'Mapa'], ['#/comprador', '<svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg>', 'Pedidos'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
+  transportista: [['#/transportista', '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'Viajes'], ['#/transportista?tab=mios', '<svg class="i" aria-hidden="true"><use href="/icons.svg#navigation"/></svg>', 'Mis viajes'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
+  admin: [['#/admin', '<svg class="i" aria-hidden="true"><use href="/icons.svg#shield"/></svg>', 'Admin'], ['#/ofertas', '<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'Ofertas'], ['#/impacto', '<svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg>', 'Impacto'], ['#/perfil', '<svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg>', 'Perfil']],
 };
 
 export function renderNav() {
@@ -47,8 +47,8 @@ export function renderNav() {
     .map(([h, , l]) => `<a href="${h}" class="${isActive(h) ? 'active' : ''}">${e(l)}</a>`)
     .join('');
   $('#topactions').innerHTML = state.user
-    ? `<button class="bell" id="bell" aria-label="Avisos${state.unread ? `: ${state.unread} sin leer` : ''}">🔔${state.unread ? `<b>${state.unread}</b>` : ''}</button>
-       <button class="btn ghost sm" id="logout">Salir</button>`
+    ? `<button class="bell" id="bell" aria-label="Avisos${state.unread ? `: ${state.unread} sin leer` : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#bell"/></svg>${state.unread ? `<b>${state.unread}</b>` : ''}</button>
+       <button class="btn ghost sm" id="logout"><svg class="i" aria-hidden="true"><use href="/icons.svg#logout"/></svg> Salir</button>`
     : `<a class="btn sm" href="#/registro">Crear cuenta</a>`;
   $('#logout')?.addEventListener('click', logout);
   $('#bell')?.addEventListener('click', showNotifications);
@@ -73,7 +73,7 @@ async function showNotifications() {
   box.style.cssText = 'position:fixed;top:64px;right:12px;left:12px;max-width:420px;margin-left:auto;z-index:40;max-height:70vh;overflow:auto';
   box.innerHTML = `<div class="row between"><h3>Avisos</h3><button class="btn ghost sm" data-close>Cerrar</button></div>` +
     (notifications.length
-      ? notifications.map((n) => `<a href="${e(n.link || '#/')}" style="display:block;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit">${n.read ? '' : '🟠 '}${e(n.text)}<div class="tiny muted">${new Date(n.created_at).toLocaleString('es-MX')}</div></a>`).join('')
+      ? notifications.map((n) => `<a href="${e(n.link || '#/')}" style="display:block;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit">${n.read ? '' : ''}${e(n.text)}<div class="tiny muted">${new Date(n.created_at).toLocaleString('es-MX')}</div></a>`).join('')
       : '<p class="muted">Sin avisos por ahora.</p>');
   document.body.append(box);
   const close = () => box.remove();
@@ -86,7 +86,7 @@ async function pollNotifications() {
   try {
     const { unread } = await api('/api/notifications');
     if (unread !== state.unread) {
-      if (state.unread != null && unread > state.unread) toast('Tienes un aviso nuevo 🔔');
+      if (state.unread != null && unread > state.unread) toast('Tienes un aviso nuevo <svg class="i" aria-hidden="true"><use href="/icons.svg#bell"/></svg>');
       state.unread = unread;
       renderNav();
     }

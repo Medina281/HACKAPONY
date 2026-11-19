@@ -1,6 +1,6 @@
 import { serverNow } from './api.js';
 import { formatRemaining, formatMXN, formatKg } from './shared/calc.js';
-import { productIcon, stockPhoto, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
+import { productIcon, productIconName, stockPhoto, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
 
 /** Escapa texto para insertarlo en HTML (previene XSS). */
 export const e = (v) =>
@@ -10,10 +10,12 @@ export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export { formatMXN as mxn, formatKg as kg };
 
+export const stripIcons = (s) => String(s).replace(/<svg[\s\S]*?<\/svg>\s*/g, '').trim();
+
 export function toast(msg, type = '') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.textContent = msg;
+  el.textContent = stripIcons(msg);
   const box = $('#toasts');
   while (box.children.length >= 2) box.firstChild.remove(); // máximo 2 avisos a la vez
   box.append(el);
@@ -28,8 +30,8 @@ export const muniOptions = (selected, { any } = {}) =>
 export function media(photo, product, cls = '') {
   if (photo) return `<img src="${e(photo)}" alt="Foto de ${e(product)}" loading="lazy" decoding="async" class="${cls}">`;
   const s = stockPhoto(product);
-  if (s) return `<img src="${e(s.url)}" alt="${e(product)} (foto de referencia)" loading="lazy" decoding="async" data-fallback="${productIcon(product)}" class="${cls}"><span class="ref-tag">referencia</span>`;
-  return `<span aria-hidden="true">${productIcon(product)}</span>`;
+  if (s) return `<img src="${e(s.url)}" alt="${e(product)} (foto de referencia)" loading="lazy" decoding="async" data-fallback="${productIconName(product)}" class="${cls}"><span class="ref-tag">referencia</span>`;
+  return `<span class="prod-tile" aria-hidden="true">${productIcon(product)}</span>`;
 }
 
 // Si una foto de referencia no carga (sin internet), se reemplaza por el ícono del producto.
@@ -38,7 +40,8 @@ document.addEventListener('error', (ev) => {
   if (img instanceof HTMLImageElement && img.dataset.fallback) {
     const span = document.createElement('span');
     span.setAttribute('aria-hidden', 'true');
-    span.textContent = img.dataset.fallback;
+    span.className = 'prod-tile';
+    span.innerHTML = `<svg class="i prod"><use href="/icons.svg#${img.dataset.fallback.replace(/[^a-z-]/g, '')}"/></svg>`;
     img.nextElementSibling?.classList.contains('ref-tag') && img.nextElementSibling.remove();
     img.replaceWith(span);
   }
@@ -73,7 +76,7 @@ const fmtElapsed = (ms) => {
 export function shelfAnalysis(l) {
   const s = l.shelf;
   return `<div class="card stack shelf-card" data-life-from="${l.created_at}" data-life-to="${l.expires_at}">
-    <div class="row between"><h3 style="margin:0">🌿 Vida útil</h3><span class="pill" data-life-phase>…</span></div>
+    <div class="row between"><h3 style="margin:0"><svg class="i" aria-hidden="true"><use href="/icons.svg#leaf"/></svg> Vida útil</h3><span class="pill" data-life-phase>…</span></div>
     <div class="bar" aria-hidden="true"><i data-life-bar style="width:0%"></i></div>
     <dl class="kv small">
       <dt>Publicado hace</dt><dd data-life-elapsed>…</dd>
@@ -126,7 +129,7 @@ export const fmtDate = (ms, opts = {}) =>
 export const waLink = (phone, text) =>
   `https://wa.me/${phone ? '52' + String(phone).replace(/\D/g, '').slice(-10) : ''}?text=${encodeURIComponent(text)}`;
 export const shareText = (l) =>
-  `🌱 Oferta en Raíz Directa: ${formatKg(l.available_g)} de ${l.product} a ${formatMXN(l.rescue_price_c)}/kg ` +
+  `Oferta en Raíz Directa: ${formatKg(l.available_g)} de ${l.product} a ${formatMXN(l.rescue_price_c)}/kg ` +
   `(${l.discount}% menos que su precio habitual declarado). Zona: ${l.municipality_name}. ${location.origin}/#/oferta/${l.id}`;
 
 export function fieldErrors(form, fields = {}) {
@@ -148,7 +151,7 @@ export const empty = (icon, title, text, action = '') =>
   `<div class="empty"><div class="big" aria-hidden="true">${icon}</div><h3>${e(title)}</h3><p>${e(text)}</p>${action}</div>`;
 
 export const errorBox = (err, retry = '') =>
-  `<div class="empty"><div class="big" aria-hidden="true">⚠️</div><h3>No pudimos cargar esto</h3><p>${e(err.message)}</p>${retry}</div>`;
+  `<div class="empty"><div class="big" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg></div><h3>No pudimos cargar esto</h3><p>${e(err.message)}</p>${retry}</div>`;
 
 /** Redimensiona una foto en el teléfono antes de subirla (ahorra datos móviles). */
 export function shrinkImage(file, max = 900, quality = 0.72) {
@@ -168,3 +171,6 @@ export function shrinkImage(file, max = 900, quality = 0.72) {
     img.src = url;
   });
 }
+
+/** Ícono de línea del sprite /icons.svg (sin emojis). */
+export const I = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true" focusable="false"><use href="/icons.svg#${name}"/></svg>`;

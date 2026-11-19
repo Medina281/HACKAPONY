@@ -10,7 +10,7 @@ export default async function buyer({ app, state }) {
       <div style="font-size:2rem;width:52px;height:52px;display:grid;place-items:center;background:var(--cream-2);border-radius:12px;overflow:hidden;flex:none">${media(o.photo, o.product)}</div>
       <div class="grow"><div class="row between"><strong>${e(o.folio)} · ${e(o.product)}</strong>${orderPill(o.status)}</div>
       <div class="small muted">${kg(o.qty_g)} · ${mxn(o.total_rescue_c)} · ahorro ${mxn(o.savings_c)} · ${e(o.producer.name)}</div>
-      <div class="small">🕑 ${fmtDate(o.pickup_at)}</div></div>
+      <div class="small"><svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> ${fmtDate(o.pickup_at)}</div></div>
     </a>`;
   app.innerHTML = `
   <div class="wrap page stack">
@@ -22,7 +22,7 @@ export default async function buyer({ app, state }) {
       <div class="kpi"><b>${s.open_orders}</b><span>pedidos en curso</span></div>
     </div>
     <h2>En curso</h2>
-    ${active.length ? active.map(row).join('') : empty('🛒', 'No tienes pedidos en curso', 'Aparta producto fresco con descuento cerca de tu negocio.', '<a class="btn" href="#/ofertas">Ver ofertas</a>')}
+    ${active.length ? active.map(row).join('') : empty('<svg class="i" aria-hidden="true"><use href="/icons.svg#basket"/></svg>', 'No tienes pedidos en curso', 'Aparta producto fresco con descuento cerca de tu negocio.', '<a class="btn" href="#/ofertas">Ver ofertas</a>')}
     <h2>Historial</h2>
     ${past.length ? past.map(row).join('') : '<p class="muted">Aún no tienes pedidos terminados.</p>'}
   </div>`;

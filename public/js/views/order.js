@@ -29,7 +29,7 @@ export default async function orderView({ app, params, state }) {
       <div class="ticket-head">
         <div class="row between"><span class="small" style="opacity:.85">Folio</span>${orderPill(o.status)}</div>
         <h1 style="font-size:2.2rem">${e(o.folio)}</h1>
-        <p style="margin:0">${o.status === 'recolectado' ? '¡Entregado! Gracias por rescatar alimento 🌱' : o.status === 'cancelado' ? 'Pedido cancelado' : o.status === 'vencido' ? 'Venció sin recolección; el producto se liberó.' : isBuyer ? 'Apartado. Listo para recolección directa con el productor.' : 'Un comercio apartó tu producto.'}</p>
+        <p style="margin:0">${o.status === 'recolectado' ? '¡Entregado! Gracias por rescatar alimento <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg>' : o.status === 'cancelado' ? 'Pedido cancelado' : o.status === 'vencido' ? 'Venció sin recolección; el producto se liberó.' : isBuyer ? 'Apartado. Listo para recolección directa con el productor.' : 'Un comercio apartó tu producto.'}</p>
       </div>
       <div class="ticket-body stack">
         ${active || o.status === 'recolectado' ? `<div class="steps" aria-label="Avance del pedido">${STEPS.map((s, i) => `<i class="${i <= stepIdx ? 'on' : ''}" title="${s}"></i>`).join('')}</div>
@@ -52,10 +52,10 @@ export default async function orderView({ app, params, state }) {
         </dl>
 
         ${active ? `<div class="stack">
-          <a class="btn wa big" target="_blank" rel="noopener" href="${waLink(isBuyer ? o.producer.phone : o.buyer.phone, isBuyer ? msgBuyer : msgProducer)}">💬 ${isBuyer ? 'Confirmar horario por WhatsApp' : 'Escribir al comprador'}</a>
+          <a class="btn wa big" target="_blank" rel="noopener" href="${waLink(isBuyer ? o.producer.phone : o.buyer.phone, isBuyer ? msgBuyer : msgProducer)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> ${isBuyer ? 'Confirmar horario por WhatsApp' : 'Escribir al comprador'}</a>
           <div class="two">
-            <a class="btn secondary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${mapQuery}">🧭 Cómo llegar</a>
-            <a class="btn ghost" target="_blank" rel="noopener" href="${waLink('', details)}">📤 Enviar datos</a>
+            <a class="btn secondary" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${mapQuery}"><svg class="i" aria-hidden="true"><use href="/icons.svg#navigation"/></svg> Cómo llegar</a>
+            <a class="btn ghost" target="_blank" rel="noopener" href="${waLink('', details)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg> Enviar datos</a>
           </div>
           <p class="tiny muted">“Cómo llegar” busca la referencia escrita por el productor; confirma la ubicación exacta por WhatsApp.</p>
         </div>` : ''}
@@ -63,11 +63,11 @@ export default async function orderView({ app, params, state }) {
         ${deliveryBlock(o, isBuyer, isProducer, active, state)}
 
         ${isProducer && active ? `<div class="card stack" style="background:var(--cream)">
-          ${o.status === 'apartado' ? `<button class="btn block" data-act="confirmar">✔️ Confirmar pedido</button>` : ''}
-          ${o.status === 'confirmado' ? `<button class="btn secondary block" data-act="listo">📦 Marcar listo para recoger</button>` : ''}
+          ${o.status === 'apartado' ? `<button class="btn block" data-act="confirmar"><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> Confirmar pedido</button>` : ''}
+          ${o.status === 'confirmado' ? `<button class="btn secondary block" data-act="listo"><svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg> Marcar listo para recoger</button>` : ''}
           ${o.status !== 'apartado' && !(o.delivery && ['asignada', 'recogida'].includes(o.delivery.status)) ? `<form id="deliver" class="stack"><label for="code">Código que te dicta el comprador</label>
             <input id="code" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:800">
-            <button class="btn big">✅ Registrar entrega</button></form>` : ''}
+            <button class="btn big"><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Registrar entrega</button></form>` : ''}
         </div>` : ''}
 
         ${active && (isBuyer || isProducer) ? `<details class="more"><summary>Cancelar pedido</summary>
@@ -81,7 +81,7 @@ export default async function orderView({ app, params, state }) {
 
         <div><h3>Historial</h3><ul class="timeline">${o.events.map((ev) => `<li><strong>${e(ev.to_status)}</strong> · ${fmtDate(ev.created_at)}${ev.note ? `<br><span class="muted">${e(ev.note)}</span>` : ''}</li>`).join('')}</ul></div>
         ${o.is_demo ? '<p class="tiny muted">Pedido de demostración (datos ficticios).</p>' : ''}
-        <button class="btn ghost sm" id="report">🚩 Reportar un problema</button>
+        <button class="btn ghost sm" id="report"><svg class="i" aria-hidden="true"><use href="/icons.svg#flag"/></svg> Reportar un problema</button>
       </div>
     </div>
   </div>`;
@@ -90,7 +90,7 @@ export default async function orderView({ app, params, state }) {
   const act = async (action, body = {}) => {
     try {
       await api(`/api/orders/${o.folio}/${action}`, { method: 'POST', body });
-      toast(action === 'entregar' ? '¡Entrega registrada! ✅' : 'Pedido actualizado', 'ok');
+      toast(action === 'entregar' ? '¡Entrega registrada! <svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg>' : 'Pedido actualizado', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
@@ -111,7 +111,7 @@ export default async function orderView({ app, params, state }) {
     const fd = Object.fromEntries(new FormData(ev.target));
     try {
       await api('/api/deliveries', { method: 'POST', body: { ...fd, folio: o.folio, needs_cold: !!fd.needs_cold } });
-      toast('Listo: avisamos a transportistas cercanos 🚚', 'ok');
+      toast('Listo: avisamos a transportistas cercanos <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
@@ -130,7 +130,7 @@ export default async function orderView({ app, params, state }) {
     ev.preventDefault();
     try {
       await api(`/api/deliveries/${o.delivery.id}/handoff`, { method: 'POST', body: { code: ev.target.code.value } });
-      toast('Producto entregado al transportista 🚚', 'ok');
+      toast('Producto entregado al transportista <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', 'ok');
       reload();
     } catch (err) {
       toast(err.message, 'error');
@@ -138,7 +138,7 @@ export default async function orderView({ app, params, state }) {
   });
 }
 
-const DSTATUS = { abierta: 'Buscando transportista…', asignada: 'Transportista asignado', recogida: 'En camino 🚚', entregada: 'Entregado por transportista', cancelada: 'Flete cancelado' };
+const DSTATUS = { abierta: 'Buscando transportista…', asignada: 'Transportista asignado', recogida: 'En camino <svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg>', entregada: 'Entregado por transportista', cancelada: 'Flete cancelado' };
 
 function deliveryBlock(o, isBuyer, isProducer, active, state) {
   const d = o.delivery && o.delivery.status !== 'cancelada' ? o.delivery : null;
@@ -150,7 +150,7 @@ function deliveryBlock(o, isBuyer, isProducer, active, state) {
     const t = JSON.parse(localStorage.getItem('rd_transport') || '{}');
     const fuel = netSavings({ savingsCents: 0, distanceKm: km, kmPerLiter: t.kmPerLiter || 10, pricePerLiterCents: pesosToCents(t.pricePerLiter || 24) }).transportCents;
     return `<div class="card stack">
-      <div class="row between"><strong>🚚 ¿Te lo llevan?</strong><span class="mono-tag">opcional</span></div>
+      <div class="row between"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> ¿Te lo llevan?</strong><span class="mono-tag">opcional</span></div>
       <p class="small muted" style="margin:0">Un transportista independiente de la zona puede recogerlo y llevarlo a tu negocio. Tú ofreces el pago.</p>
       <button class="btn secondary" id="askTruck">Pedir transportista</button>
       <form id="truckForm" class="stack" hidden>
@@ -168,14 +168,14 @@ function deliveryBlock(o, isBuyer, isProducer, active, state) {
   }
   const c = d.carrier;
   return `<div class="card stack">
-    <div class="row between"><strong>🚚 Flete</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
-    <div class="small">${mxn(d.fee_c)} · a ${e(d.address)}${d.needs_cold ? ' · ❄️' : ''}</div>
+    <div class="row between"><strong><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Flete</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
+    <div class="small">${mxn(d.fee_c)} · a ${e(d.address)}${d.needs_cold ? ' · <svg class="i" aria-hidden="true"><use href="/icons.svg#snow"/></svg>' : ''}</div>
     ${c ? `<div class="small">${e(c.name)} · ${e(c.vehicle || '')}</div>
-      ${d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}">💬 WhatsApp al transportista</a>` : ''}` : ''}
+      ${d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}"><svg class="i" aria-hidden="true"><use href="/icons.svg#chat"/></svg> WhatsApp al transportista</a>` : ''}` : ''}
     ${isProducer && d.status === 'asignada' && o.status === 'apartado' ? '<p class="small" style="margin:0">Confirma el pedido para poder entregarlo al transportista.</p>' : ''}
     ${isProducer && d.status === 'asignada' && o.status !== 'apartado' ? `<form id="handoff" class="stack"><label for="hcode">Código que te dice el transportista</label>
       <input id="hcode" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.4rem;letter-spacing:.3em;text-align:center;font-weight:800">
-      <button class="btn">📦 Entregar al transportista</button></form>` : ''}
+      <button class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg> Entregar al transportista</button></form>` : ''}
     ${isBuyer && ['abierta', 'asignada'].includes(d.status) ? '<button class="btn ghost sm" id="cancelTruck">Cancelar flete (lo recojo yo)</button>' : ''}
     ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> al transportista.</p>' : ''}
   </div>`;

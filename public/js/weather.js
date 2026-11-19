@@ -42,8 +42,8 @@ function trimToNow(d) {
 
 /** Alternativa sin internet: el agricultor elige cómo está el día. */
 export const MANUAL_CLIMATES = [
-  { id: 'fresco', label: '🌥️ Fresco', temp: 15 },
-  { id: 'templado', label: '⛅ Templado', temp: 22 },
-  { id: 'caluroso', label: '☀️ Caluroso', temp: 30 },
+  { id: 'fresco', label: '<svg class="i" aria-hidden="true"><use href="/icons.svg#cloud"/></svg> Fresco', temp: 15 },
+  { id: 'templado', label: '<svg class="i" aria-hidden="true"><use href="/icons.svg#cloud-sun"/></svg> Templado', temp: 22 },
+  { id: 'caluroso', label: '<svg class="i" aria-hidden="true"><use href="/icons.svg#sun"/></svg> Caluroso', temp: 30 },
 ];
 export const manualForecast = (temp) => ({ source: 'usuario', temps: Array(168).fill(temp), humidity: [] });

@@ -55,7 +55,7 @@ export function speak(text) {
   if (!canSpeak || !text) return;
   try {
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[*_~]/g, ''));
+    const u = new SpeechSynthesisUtterance(text.replace(/<[^>]+>/g, '').replace(/[*_~]/g, ''));
     u.lang = 'es-MX';
     const v = pickVoice();
     if (v) u.voice = v;
