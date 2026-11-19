@@ -101,6 +101,14 @@ function releaseInventory(db, order, reason, now) {
   );
 }
 
+/** Marca un pedido como recolectado/entregado (usado por el transportista al entregar). */
+export function completeOrder(db, now, orderId, actorId, note) {
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!['confirmado', 'listo'].includes(o.status)) throw new HttpError(409, 'El pedido no está listo para entregarse');
+  db.prepare("UPDATE orders SET status = 'recolectado', delivered_at = ?, updated_at = ? WHERE id = ?").run(now, now, orderId);
+  event(db, orderId, o.status, 'recolectado', actorId, note, now);
+}
+
 const codeAttempts = new Map();
 
 export function transition(db, now, user, folio, action, body = {}) {
@@ -119,6 +127,8 @@ export function transition(db, now, user, folio, action, body = {}) {
 
     let note = null;
     if (action === 'entregar') {
+      const fl = db.prepare(`SELECT status FROM deliveries WHERE order_id = ? AND status IN ('asignada','recogida')`).get(o.id);
+      if (fl) throw new HttpError(409, 'Este pedido lo entrega un transportista: captura su código en "Entregar al transportista".');
       const tries = codeAttempts.get(o.id) || 0;
       if (tries >= 5) throw new HttpError(429, 'Demasiados intentos con código incorrecto. Contacta a soporte.');
       if (String(body.code || '').trim() !== o.delivery_code) {
@@ -143,6 +153,11 @@ export function transition(db, now, user, folio, action, body = {}) {
         releaseInventory(db, o, 'cancelacion', now);
       }
     }
+    if (action === 'cancelar') {
+      const fl = db.prepare(`SELECT status FROM deliveries WHERE order_id = ? AND status = 'recogida'`).get(o.id);
+      if (fl && actorRole !== 'admin') throw new HttpError(409, 'El producto ya va en camino con el transportista; no se puede cancelar.');
+      db.prepare(`UPDATE deliveries SET status='cancelada', cancel_reason='Pedido cancelado' WHERE order_id = ? AND status IN ('abierta','asignada')`).run(o.id);
+    }
     db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(t.to, now, o.id);
     event(db, o.id, o.status, t.to, user.id, note, now);
     const other = isBuyer ? o.producer_id : o.buyer_id;
@@ -160,12 +175,14 @@ export function transition(db, now, user, folio, action, body = {}) {
 /** Marca como vencidos los pedidos no recogidos después de la tolerancia y libera el inventario. */
 export function sweepExpired(db, now) {
   const stale = db
-    .prepare(`SELECT * FROM orders WHERE status IN ('apartado','confirmado','listo') AND hold_until < ?`)
+    .prepare(`SELECT * FROM orders o WHERE status IN ('apartado','confirmado','listo') AND hold_until < ?
+      AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.status IN ('asignada','recogida'))`)
     .all(now);
   if (!stale.length) return 0;
   tx(db, () => {
     for (const o of stale) {
       db.prepare("UPDATE orders SET status = 'vencido', updated_at = ? WHERE id = ?").run(now, o.id);
+      db.prepare(`UPDATE deliveries SET status='cancelada', cancel_reason='Pedido vencido' WHERE order_id = ? AND status = 'abierta'`).run(o.id);
       releaseInventory(db, o, 'apartado_vencido', now);
       event(db, o.id, o.status, 'vencido', null, 'No se recogió dentro de la tolerancia', now);
       notify(db, o.buyer_id, `Tu pedido ${o.folio} venció porque no se recogió a tiempo`, `#/pedido/${o.folio}`, now);
@@ -208,6 +225,15 @@ export function getOrder(db, user, folio) {
   out.events = db
     .prepare('SELECT from_status, to_status, note, created_at FROM order_events WHERE order_id = ? ORDER BY id')
     .all(o.id);
+  const d = db.prepare(`SELECT d.*, c.name AS carrier_name, c.phone AS carrier_phone, c.vehicle AS carrier_vehicle FROM deliveries d
+    LEFT JOIN users c ON c.id = d.carrier_id WHERE d.order_id = ?`).get(o.id);
+  if (d) {
+    out.delivery = {
+      id: d.id, status: d.status, fee_c: d.fee_c, address: d.address, to_muni: d.to_muni, distance_km: d.distance_km,
+      needs_cold: !!d.needs_cold, cancel_reason: d.cancel_reason,
+      carrier: d.carrier_id ? { name: d.carrier_name, phone: d.carrier_phone, vehicle: d.carrier_vehicle } : null,
+    };
+  }
   return out;
 }
 

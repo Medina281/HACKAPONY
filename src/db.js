@@ -153,6 +153,84 @@ const MIGRATIONS = [
     CHECK (input_method IN ('formulario','voz','frase'));
   ALTER TABLE lots ADD COLUMN shelf_json TEXT;
   `,
+  // v3: rol transportista (se reconstruye users para ampliar el CHECK de roles) y fletes
+  {
+    fkOff: true,
+    sql: `
+  CREATE TABLE users_new (
+    id INTEGER PRIMARY KEY,
+    role TEXT NOT NULL CHECK (role IN ('productor','comprador','transportista','admin')),
+    name TEXT NOT NULL,
+    business_name TEXT,
+    business_type TEXT,
+    email TEXT UNIQUE COLLATE NOCASE,
+    phone TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    municipality TEXT NOT NULL DEFAULT 'morelia',
+    pickup_point TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    vehicle TEXT,
+    capacity_kg INTEGER CHECK (capacity_kg IS NULL OR capacity_kg > 0),
+    refrigerated INTEGER NOT NULL DEFAULT 0,
+    radius_km INTEGER NOT NULL DEFAULT 40,
+    available INTEGER NOT NULL DEFAULT 1
+  );
+  INSERT INTO users_new (id, role, name, business_name, business_type, email, phone, password_hash, municipality, pickup_point, active, is_demo, created_at)
+    SELECT id, role, name, business_name, business_type, email, phone, password_hash, municipality, pickup_point, active, is_demo, created_at FROM users;
+  DROP TABLE users;
+  ALTER TABLE users_new RENAME TO users;
+
+  CREATE TABLE deliveries (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL UNIQUE REFERENCES orders(id),
+    buyer_id INTEGER NOT NULL REFERENCES users(id),
+    producer_id INTEGER NOT NULL REFERENCES users(id),
+    carrier_id INTEGER REFERENCES users(id),
+    from_muni TEXT NOT NULL,
+    to_muni TEXT NOT NULL,
+    address TEXT NOT NULL,
+    distance_km REAL NOT NULL,
+    weight_g INTEGER NOT NULL,
+    fee_c INTEGER NOT NULL CHECK (fee_c > 0),
+    needs_cold INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    pickup_code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'abierta' CHECK (status IN ('abierta','asignada','recogida','entregada','cancelada')),
+    cancel_reason TEXT,
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    assigned_at INTEGER,
+    picked_at INTEGER,
+    delivered_at INTEGER
+  );
+  CREATE INDEX idx_deliv_status ON deliveries(status, from_muni);
+  CREATE INDEX idx_deliv_carrier ON deliveries(carrier_id, status);
+  `,
+  },
+  // v4: precios de mercado del SNIIM (caché) y origen del precio de referencia de cada lote
+  `
+  CREATE TABLE market_prices (
+    id INTEGER PRIMARY KEY,
+    product TEXT NOT NULL,
+    sniim_id INTEGER NOT NULL,
+    variety TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('morelia','nacional')),
+    market TEXT NOT NULL,
+    price_date TEXT,
+    freq_c INTEGER NOT NULL CHECK (freq_c > 0),
+    min_c INTEGER,
+    max_c INTEGER,
+    n_markets INTEGER NOT NULL DEFAULT 1,
+    source_url TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_market_product ON market_prices(product, fetched_at);
+  CREATE TABLE market_fetch_log (id INTEGER PRIMARY KEY, product TEXT NOT NULL, ok INTEGER NOT NULL, error TEXT, fetched_at INTEGER NOT NULL);
+  ALTER TABLE lots ADD COLUMN ref_source TEXT NOT NULL DEFAULT 'declarado' CHECK (ref_source IN ('declarado','sniim'));
+  ALTER TABLE lots ADD COLUMN ref_market_json TEXT;
+  `,
 ];
 
 export function openDb(file) {
@@ -165,10 +243,18 @@ export function openDb(file) {
   let v = row ? row.v : 0;
   if (!row) db.prepare('INSERT INTO schema_version (v) VALUES (0)').run();
   for (; v < MIGRATIONS.length; v++) {
+    const m = typeof MIGRATIONS[v] === 'string' ? { sql: MIGRATIONS[v] } : MIGRATIONS[v];
+    // Reconstruir una tabla con claves foráneas exige desactivarlas fuera de la transacción.
+    if (m.fkOff) db.exec('PRAGMA foreign_keys = OFF');
     tx(db, () => {
-      db.exec(MIGRATIONS[v]);
+      db.exec(m.sql);
+      if (m.fkOff) {
+        const bad = db.prepare('PRAGMA foreign_key_check').all();
+        if (bad.length) throw new Error('Migración rompe claves foráneas');
+      }
       db.prepare('UPDATE schema_version SET v = ?').run(v + 1);
     });
+    if (m.fkOff) db.exec('PRAGMA foreign_keys = ON');
   }
   return db;
 }

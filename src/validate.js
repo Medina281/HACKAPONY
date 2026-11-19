@@ -89,7 +89,7 @@ export function validatePhone(p) {
 export function validateRegistration(b) {
   const e = {};
   const role = b.role;
-  if (!['productor', 'comprador'].includes(role)) e.role = 'Elige si vendes o compras';
+  if (!['productor', 'comprador', 'transportista'].includes(role)) e.role = 'Elige si vendes, compras o transportas';
   const name = str(b.name, 80);
   if (name.length < 2) e.name = 'Escribe tu nombre';
   const phone = validatePhone(b.phone);
@@ -101,8 +101,13 @@ export function validateRegistration(b) {
   if (!MUNICIPALITIES.some((m) => m.id === b.municipality)) e.municipality = 'Selecciona tu municipio';
   const business_name = str(b.business_name, 80) || null;
   if (role === 'comprador' && !business_name) e.business_name = 'Nombre de tu negocio';
+  const capacity = b.capacity_kg === '' || b.capacity_kg == null ? null : Math.round(num(b.capacity_kg));
+  if (role === 'transportista' && (!capacity || capacity <= 0 || capacity > 40000)) e.capacity_kg = 'Indica cuántos kilos carga tu vehículo';
   if (Object.keys(e).length) throw bad('Revisa los datos marcados', e);
   return {
+    vehicle: role === 'transportista' ? str(b.vehicle, 60) || 'Camioneta' : null,
+    capacity_kg: role === 'transportista' ? capacity : null,
+    refrigerated: role === 'transportista' && b.refrigerated ? 1 : 0,
     role, name, phone, email, password, municipality: b.municipality, business_name,
     business_type: str(b.business_type, 40) || null, pickup_point: str(b.pickup_point, 160) || null,
   };

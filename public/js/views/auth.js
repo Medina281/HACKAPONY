@@ -5,12 +5,13 @@ import { $, e, toast, muniOptions, fieldErrors } from '../ui.js';
 const DEMO = [
   ['Productor (Tarímbaro)', '4430000001'],
   ['Comprador (Fonda en Morelia)', '4430000101'],
+  ['Transportista (Morelia)', '4430000201'],
   ['Administrador', '4430000999'],
 ];
 
 export default async function authView({ app, opts, query }) {
   if (opts.mode === 'login') return login(app);
-  return register(app, query.rol === 'comprador' ? 'comprador' : query.rol === 'productor' ? 'productor' : null);
+  return register(app, ['comprador', 'productor', 'transportista'].includes(query.rol) ? query.rol : null);
 }
 
 function login(app) {
@@ -67,8 +68,9 @@ function register(app, role) {
     <form id="f" class="card" novalidate>
       <div class="field"><label>¿Qué vas a hacer?</label>
         <div class="seg" role="radiogroup">
-          <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}">🌱 Vendo producto</button>
-          <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}">🍽️ Compro para mi negocio</button>
+          <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}">🌱 Vendo</button>
+          <button type="button" data-role="comprador" class="${role === 'comprador' ? 'on' : ''}">🍽️ Compro</button>
+          <button type="button" data-role="transportista" class="${role === 'transportista' ? 'on' : ''}">🚚 Transporto</button>
         </div>
         <div class="err" data-for="role"></div>
       </div>
@@ -84,12 +86,17 @@ function register(app, role) {
       <div class="field" id="bizp" ${role === 'productor' ? '' : 'hidden'}>
         <label for="business_name_p">Nombre de tu huerta o negocio <span class="muted">(opcional)</span></label><input id="business_name_p" placeholder="Ej. Huerta Los Encinos">
       </div>
+      <div class="field" id="veh" ${role === 'transportista' ? '' : 'hidden'}>
+        <label for="vehicle">Vehículo</label><input id="vehicle" name="vehicle" placeholder="Ej. Camioneta 3.5 t">
+        <div class="two" style="margin-top:10px"><div><label for="capacity_kg">Carga máxima</label><div class="input-unit"><input id="capacity_kg" name="capacity_kg" inputmode="numeric" placeholder="1500"><span>kg</span></div><div class="err" data-for="capacity_kg"></div></div>
+        <label class="inline-check" style="align-self:end"><input type="checkbox" name="refrigerated"><span>Tengo refrigeración</span></label></div>
+      </div>
       <div class="field"><label for="phone">Teléfono (WhatsApp)</label><input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="10 dígitos" required>
         <div class="hint">Con él entras y te contactan por WhatsApp. Sólo se comparte con quien tenga un pedido contigo.</div><div class="err" data-for="phone"></div></div>
       <div class="field"><label for="municipality">Municipio</label><select id="municipality" name="municipality">${muniOptions('morelia')}</select><div class="err" data-for="municipality"></div></div>
       <div class="field"><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><div class="hint">Mínimo 8 caracteres.</div><div class="err" data-for="password"></div></div>
       <div class="field"><label for="email">Correo <span class="muted">(opcional)</span></label><input id="email" name="email" type="email" autocomplete="email"><div class="err" data-for="email"></div></div>
-      <p class="tiny muted">Al registrarte aceptas que tus datos de contacto se usen sólo para coordinar pedidos. Prototipo: falta redactar el aviso de privacidad formal conforme a la LFPDPPP.</p>
+      <p class="tiny muted">Tus datos de contacto sólo se usan para coordinar pedidos. Lee el <a href="#/privacidad">aviso de privacidad</a>. El correo es opcional.</p>
       <button class="btn big" type="submit">Crear cuenta</button>
       <p class="center small" style="margin-top:12px">¿Ya tienes cuenta? <a href="#/entrar">Entra</a></p>
     </form>
@@ -103,15 +110,16 @@ function register(app, role) {
     f.querySelectorAll('[data-role]').forEach((x) => x.classList.toggle('on', x === b));
     $('#biz').hidden = chosen !== 'comprador';
     $('#bizp').hidden = chosen !== 'productor';
+    $('#veh').hidden = chosen !== 'transportista';
   });
   f.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const body = Object.fromEntries(new FormData(f));
     body.role = chosen;
-    if (chosen === 'productor') {
-      body.business_name = $('#business_name_p').value;
-      delete body.business_type;
-    }
+    if (chosen !== 'comprador') delete body.business_type;
+    if (chosen === 'productor') body.business_name = $('#business_name_p').value;
+    if (chosen === 'transportista') { body.business_name = ''; body.refrigerated = !!f.refrigerated.checked; }
+    else { delete body.vehicle; delete body.capacity_kg; delete body.refrigerated; }
     const btn = f.querySelector('[type=submit]');
     btn.disabled = true;
     try {

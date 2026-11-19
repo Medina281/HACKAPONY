@@ -78,3 +78,22 @@ export const REPORT_REASONS = [
 export function normalize(s) {
   return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
+
+// Fotos REALES de referencia (Wikimedia Commons, licencias libres). Se muestran sólo cuando el productor
+// no subió su propia foto y siempre con la etiqueta "referencia". Créditos en #/creditos.
+export const STOCK_PHOTOS = {
+  Jitomate: { file: 'Tomatoes.jpg', author: 'Wilfredor', license: 'CC0 1.0' },
+  Aguacate: { file: 'Avocado Hass - single and halved.jpg', author: 'Ivar Leidus (Iifar)', license: 'CC BY-SA (ver ficha)' },
+  Fresa: { file: 'Garden strawberry (Fragaria × ananassa) single2.jpg', author: 'Ivar Leidus (Iifar)', license: 'CC BY-SA 4.0' },
+  Guayaba: { file: 'Psidium guajava fruit.jpg', author: 'A-giâu', license: 'CC BY-SA 3.0' },
+  Limón: { file: 'Lime - whole and halved.jpg', author: 'Ivar Leidus (Iifar)', license: 'CC BY-SA (ver ficha)' },
+  Mango: { file: 'Mangos - single and halved.jpg', author: 'Ivar Leidus (Iifar)', license: 'CC BY-SA (ver ficha)' },
+  Cebolla: { file: 'YellowOnions.jpg', author: 'Jon Sullivan', license: 'Dominio público' },
+  Naranja: { file: 'Oranges - whole-halved-segment.jpg', author: 'ver ficha en Commons', license: 'ver ficha en Commons' },
+};
+const commons = (file, w) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`;
+export const stockPhoto = (product, w = 480) => {
+  const p = PRODUCTS.find((x) => normalize(x.name) === normalize(product || '') || x.alias.some((a) => normalize(a) === normalize(product || '')));
+  const s = p && STOCK_PHOTOS[p.name];
+  return s ? { url: commons(s.file, w), ...s, page: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(s.file.replace(/ /g, '_'))}` } : null;
+};

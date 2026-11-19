@@ -244,3 +244,49 @@ export function resolvePacks(state) {
   if (state.pack_kg) for (const p of state.pending_prices || []) out[p.field] = Math.round((p.value / state.pack_kg) * 100) / 100;
   return out;
 }
+
+/**
+ * Varios productos en un mismo mensaje: "100 kilos de jitomate a 12 y 50 kilos de cebolla a 8".
+ * Se corta el texto en el último separador (y, coma, también, además) antes de cada producto nuevo.
+ * Datos compartidos (horas, municipio, transporte) sólo se copian a todos si se dice "los dos", "ambos", "todo".
+ * @returns {Array<ReturnType<typeof parseSpoken> & {segment: string}>}
+ */
+export function parseMulti(input) {
+  const t = normalizeSpeech(input);
+  const hits = [];
+  for (const p of PRODUCTS) for (const name of [p.name, ...p.alias]) {
+    const re = new RegExp(`\\b${normalize(name)}\\b`, 'g');
+    let m;
+    while ((m = re.exec(t))) hits.push({ name: p.name, start: m.index, end: m.index + m[0].length });
+  }
+  // Quitar coincidencias contenidas en otras más largas y repetidas del mismo producto
+  hits.sort((a, b) => a.start - b.start || b.end - a.end);
+  const list = [];
+  for (const h of hits) {
+    if (list.some((x) => h.start < x.end && h.end > x.start)) continue;
+    if (list.some((x) => x.name === h.name)) continue;
+    list.push(h);
+  }
+  if (list.length <= 1) return [{ ...parseSpoken(input), segment: input }];
+  const cuts = [0];
+  for (let i = 1; i < list.length; i++) {
+    const region = t.slice(list[i - 1].end, list[i].start);
+    const seps = [...region.matchAll(/\s(?:y|e|,|tambien|ademas|aparte|luego|\.)\s/g)];
+    const sep = seps.length ? seps[seps.length - 1] : null;
+    cuts.push(sep ? list[i - 1].end + sep.index + 1 : list[i].start);
+  }
+  cuts.push(t.length);
+  const parts = cuts.slice(0, -1).map((c, i) => t.slice(c, cuts[i + 1]).replace(/^\s*(?:y|e|,|tambien|ademas|aparte|luego|\.)\s+/, '').trim());
+  const results = parts.map((seg) => ({ ...parseSpoken(seg), segment: seg }));
+  const sharedAll = /\b(ambos|ambas|(?:los|las|a los|a las) (?:dos|2|tres|3)|todo|todos|todas|a cada uno)\b/.test(t);
+  const whole = parseSpoken(input);
+  for (const r of results) {
+    if (whole.municipality) r.municipality = whole.municipality; // la ubicación es del productor
+    if (whole.producer_transport) r.producer_transport = true;
+    if (sharedAll) {
+      for (const k of ['hours', 'quality', 'min_kg']) if (r[k] == null && whole[k] != null) r[k] = whole[k];
+    }
+    r.missing = r.missing.filter((k) => r[k] == null);
+  }
+  return results;
+}

@@ -1,6 +1,6 @@
 import { serverNow } from './api.js';
 import { formatRemaining, formatMXN, formatKg } from './shared/calc.js';
-import { productIcon, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
+import { productIcon, stockPhoto, MUNICIPALITIES, ORDER_STATUS } from './shared/catalog.js';
 
 /** Escapa texto para insertarlo en HTML (previene XSS). */
 export const e = (v) =>
@@ -24,11 +24,25 @@ export const muniOptions = (selected, { any } = {}) =>
   (any ? `<option value="">${e(any)}</option>` : '') +
   MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${e(m.name)}</option>`).join('');
 
+/** Foto del productor; si no hay, foto real de referencia (Commons) etiquetada; sin red, ícono. */
 export function media(photo, product, cls = '') {
-  return photo
-    ? `<img src="${e(photo)}" alt="Foto de ${e(product)}" loading="lazy" decoding="async" class="${cls}">`
-    : `<span aria-hidden="true">${productIcon(product)}</span>`;
+  if (photo) return `<img src="${e(photo)}" alt="Foto de ${e(product)}" loading="lazy" decoding="async" class="${cls}">`;
+  const s = stockPhoto(product);
+  if (s) return `<img src="${e(s.url)}" alt="${e(product)} (foto de referencia)" loading="lazy" decoding="async" data-fallback="${productIcon(product)}" class="${cls}"><span class="ref-tag">referencia</span>`;
+  return `<span aria-hidden="true">${productIcon(product)}</span>`;
 }
+
+// Si una foto de referencia no carga (sin internet), se reemplaza por el ícono del producto.
+document.addEventListener('error', (ev) => {
+  const img = ev.target;
+  if (img instanceof HTMLImageElement && img.dataset.fallback) {
+    const span = document.createElement('span');
+    span.setAttribute('aria-hidden', 'true');
+    span.textContent = img.dataset.fallback;
+    img.nextElementSibling?.classList.contains('ref-tag') && img.nextElementSibling.remove();
+    img.replaceWith(span);
+  }
+}, true);
 
 export const STATE_LABEL = {
   disponible: ['Disponible', 'ok'],

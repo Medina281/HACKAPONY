@@ -7,12 +7,14 @@ import * as auth from './auth.js';
 import * as lots from './services/lots.js';
 import * as orders from './services/orders.js';
 import * as stats from './services/stats.js';
+import * as deliveries from './services/deliveries.js';
+import * as market from './services/market.js';
 import { validateRegistration, validatePhone, str } from './validate.js';
 import { MUNICIPALITIES, REPORT_REASONS } from '../public/js/shared/catalog.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = () => Date.now(), uploadsDir } = {}) {
+export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = () => Date.now(), uploadsDir, fetchImpl } = {}) {
   const db = openDb(dbPath);
   const uploads = uploadsDir || path.join(ROOT, 'data', 'uploads');
   const routes = [];
@@ -31,10 +33,10 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
       throw bad('Ese correo ya está registrado', { email: 'Ya registrado' });
     const r = db
       .prepare(
-        `INSERT INTO users (role, name, business_name, business_type, email, phone, password_hash, municipality, pickup_point, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO users (role, name, business_name, business_type, email, phone, password_hash, municipality, pickup_point, created_at, vehicle, capacity_kg, refrigerated)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
-      .run(v.role, v.name, v.business_name, v.business_type, v.email, v.phone, auth.hashPassword(v.password), v.municipality, v.pickup_point, t);
+      .run(v.role, v.name, v.business_name, v.business_type, v.email, v.phone, auth.hashPassword(v.password), v.municipality, v.pickup_point, t, v.vehicle, v.capacity_kg, v.refrigerated);
     const token = auth.createSession(db, Number(r.lastInsertRowid), t);
     res.setHeader('Set-Cookie', auth.sessionCookie(token, { secure: process.env.COOKIE_SECURE === '1' }));
     return [201, { user: auth.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid)) }];
@@ -71,6 +73,17 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     const name = body.name != null ? str(body.name, 80) : user.name;
     if (name.length < 2) e.name = 'Nombre requerido';
     if (Object.keys(e).length) throw bad('Revisa los datos', e);
+    if (user.role === 'transportista') {
+      const cap = body.capacity_kg != null ? Math.round(Number(body.capacity_kg)) : user.capacity_kg;
+      const radius = body.radius_km != null ? Math.round(Number(body.radius_km)) : user.radius_km;
+      if (!(cap > 0 && cap <= 40000)) throw bad('Capacidad no válida', { capacity_kg: 'Entre 1 y 40,000 kg' });
+      if (!(radius >= 5 && radius <= 300)) throw bad('Radio no válido', { radius_km: 'Entre 5 y 300 km' });
+      db.prepare('UPDATE users SET vehicle=?, capacity_kg=?, refrigerated=?, radius_km=?, available=? WHERE id=?').run(
+        body.vehicle != null ? str(body.vehicle, 60) || 'Camioneta' : user.vehicle, cap,
+        body.refrigerated != null ? (body.refrigerated ? 1 : 0) : user.refrigerated, radius,
+        body.available != null ? (body.available ? 1 : 0) : user.available, user.id,
+      );
+    }
     db.prepare('UPDATE users SET name=?, business_name=?, phone=?, municipality=?, pickup_point=? WHERE id=?').run(
       name, body.business_name != null ? str(body.business_name, 80) || null : user.business_name, phone, muni,
       body.pickup_point != null ? str(body.pickup_point, 160) || null : user.pickup_point, user.id,
@@ -92,6 +105,12 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     auth.requireRole(user, 'productor');
     const id = lots.createLot(db, t, user, body, { uploadsDir: uploads });
     return [201, { id, lot: lots.serializeLot(lots.getLotRow(db, id), t, { viewer: user }) }];
+  });
+
+  route('POST', '/api/lots/batch', ({ user, body, t }) => {
+    auth.requireRole(user, 'productor');
+    const ids = lots.createLots(db, t, user, body.lots, { uploadsDir: uploads });
+    return [201, { lots: ids.map((id) => lots.serializeLot(lots.getLotRow(db, id), t, { viewer: user })) }];
   });
 
   route('PATCH', '/api/lots/:id/price', ({ user, body, params, t }) => {
@@ -143,6 +162,38 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     return { summary: stats.buyerSummary(db, user) };
   });
 
+  // ---------- Fletes (transportistas independientes) ----------
+  route('POST', '/api/deliveries', ({ user, body, t }) => {
+    auth.requireRole(user, 'comprador');
+    const id = deliveries.requestDelivery(db, t, user, body);
+    return [201, { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, id), user) }];
+  });
+  route('GET', '/api/deliveries', ({ user, query }) => {
+    auth.requireRole(user, 'transportista');
+    return { deliveries: deliveries.listForCarrier(db, user, query.scope === 'mine' ? 'mine' : 'open', { all: query.all === '1' }) };
+  });
+  route('GET', '/api/deliveries/:id', ({ user, params }) => {
+    auth.requireRole(user);
+    const d = deliveries.getDeliveryRow(db, Number(params.id));
+    const s = deliveries.serializeDelivery(d, user);
+    // Un transportista puede ver un flete abierto (sin datos de contacto) o uno que sea suyo.
+    if (s.role === 'publico' && !(user.role === 'transportista' && d.status === 'abierta')) throw new HttpError(403, 'No tienes acceso a este flete');
+    return { delivery: s };
+  });
+  route('POST', '/api/deliveries/:id/:action', ({ user, params, body, t }) => {
+    auth.requireRole(user);
+    deliveries.actOnDelivery(db, t, user, Number(params.id), params.action, body);
+    const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    return { delivery: deliveries.serializeDelivery(deliveries.getDeliveryRow(db, Number(params.id)), fresh) };
+  });
+  route('GET', '/api/carrier/summary', ({ user }) => {
+    auth.requireRole(user, 'transportista');
+    return { summary: deliveries.carrierSummary(db, user) };
+  });
+
+  // ---------- Precios de mercado (SNIIM) ----------
+  route('GET', '/api/market/:product', ({ params, t }) => ({ price: market.getMarketPrice(db, params.product, { now: t, fetchImpl }) }));
+
   // ---------- Plantillas ----------
   route('GET', '/api/templates', ({ user }) => {
     auth.requireRole(user, 'productor');
@@ -181,10 +232,20 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
       orderId = o.id;
     }
     if (!lotId && !orderId) throw bad('Indica la oferta o el pedido');
-    db.prepare('INSERT INTO reports (lot_id, order_id, reporter_id, reason, details, created_at) VALUES (?,?,?,?,?,?)').run(
+    const r = db.prepare('INSERT INTO reports (lot_id, order_id, reporter_id, reason, details, created_at) VALUES (?,?,?,?,?,?)').run(
       lotId, orderId, user.id, body.reason, str(body.details, 500) || null, t,
     );
-    return [201, { ok: true }];
+    // El reporte llega al panel de administración y se avisa a cada administrador.
+    for (const a of db.prepare("SELECT id FROM users WHERE role='admin' AND active=1").all())
+      db.prepare('INSERT INTO notifications (user_id, text, link, created_at) VALUES (?,?,?,?)').run(a.id, `🚩 Nuevo reporte #${r.lastInsertRowid}: ${REPORT_REASONS.find((x) => x.id === body.reason).label}`, '#/admin?tab=reportes', t);
+    return [201, { ok: true, id: Number(r.lastInsertRowid) }];
+  });
+  route('GET', '/api/reports/mine', ({ user }) => {
+    auth.requireRole(user);
+    return {
+      reports: db.prepare(`SELECT r.id, r.reason, r.details, r.status, r.resolution, r.created_at, l.product, o.folio FROM reports r
+        LEFT JOIN lots l ON l.id = r.lot_id LEFT JOIN orders o ON o.id = r.order_id WHERE r.reporter_id = ? ORDER BY r.id DESC`).all(user.id),
+    };
   });
   route('GET', '/api/notifications', ({ user }) => {
     auth.requireRole(user);
@@ -212,6 +273,12 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
         .map((l) => lots.serializeLot(l, t, { viewer: user })),
       orders: db.prepare(`SELECT o.folio, o.status, o.qty_g, o.total_rescue_c, o.created_at, o.is_demo, l.product, b.business_name buyer, p.name producer
         FROM orders o JOIN lots l ON l.id=o.lot_id JOIN users b ON b.id=o.buyer_id JOIN users p ON p.id=o.producer_id ORDER BY o.id DESC LIMIT 200`).all(),
+      deliveries: db.prepare(`SELECT d.id, d.status, d.fee_c, d.distance_km, d.weight_g, d.from_muni, d.to_muni, d.created_at, o.folio, l.product,
+        b.business_name buyer, c.name carrier FROM deliveries d JOIN orders o ON o.id=d.order_id JOIN lots l ON l.id=o.lot_id
+        JOIN users b ON b.id=d.buyer_id LEFT JOIN users c ON c.id=d.carrier_id ORDER BY d.id DESC LIMIT 200`).all(),
+      market: db.prepare(`SELECT product, variety, scope, market, price_date, freq_c, fetched_at FROM market_prices m
+        WHERE fetched_at = (SELECT MAX(fetched_at) FROM market_prices WHERE product = m.product) ORDER BY product`).all(),
+      market_errors: db.prepare('SELECT product, error, fetched_at FROM market_fetch_log ORDER BY id DESC LIMIT 10').all(),
       reports: db.prepare(`SELECT r.*, u.name reporter, l.product, o.folio FROM reports r JOIN users u ON u.id=r.reporter_id
         LEFT JOIN lots l ON l.id=r.lot_id LEFT JOIN orders o ON o.id=r.order_id ORDER BY r.status='abierto' DESC, r.id DESC`).all(),
     };
@@ -223,12 +290,34 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     if (!body.active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(Number(params.id));
     return { ok: true };
   });
-  route('POST', '/api/admin/reports/:id', ({ user, params, body }) => {
+  route('POST', '/api/admin/reports/:id', ({ user, params, body, t }) => {
     auth.requireRole(user, 'admin');
     const status = ['resuelto', 'descartado'].includes(body.status) ? body.status : null;
     if (!status) throw bad('Estado no válido');
-    db.prepare('UPDATE reports SET status=?, resolution=?, resolved_by=? WHERE id=?').run(status, str(body.resolution, 300) || null, user.id, Number(params.id));
+    const rep = db.prepare('SELECT r.*, l.producer_id FROM reports r LEFT JOIN lots l ON l.id = r.lot_id WHERE r.id = ?').get(Number(params.id));
+    if (!rep) throw new HttpError(404, 'Reporte no encontrado');
+    const actions = [];
+    if (body.pause_lot && rep.lot_id) {
+      db.prepare("UPDATE lots SET status='pausado' WHERE id=? AND status='activo'").run(rep.lot_id);
+      actions.push('oferta pausada');
+    }
+    if (body.suspend_producer && rep.producer_id) {
+      db.prepare('UPDATE users SET active=0 WHERE id=? AND role != ?').run(rep.producer_id, 'admin');
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(rep.producer_id);
+      actions.push('productor suspendido');
+    }
+    const resolution = [str(body.resolution, 300), ...actions].filter(Boolean).join(' · ') || null;
+    db.prepare('UPDATE reports SET status=?, resolution=?, resolved_by=? WHERE id=?').run(status, resolution, user.id, rep.id);
+    db.prepare('INSERT INTO notifications (user_id, text, link, created_at) VALUES (?,?,?,?)').run(
+      rep.reporter_id, `Tu reporte #${rep.id} fue ${status}${resolution ? `: ${resolution}` : ''}`, '#/perfil', t);
     return { ok: true };
+  });
+
+  route('POST', '/api/admin/market/refresh', async ({ user, t }) => {
+    auth.requireRole(user, 'admin');
+    const results = {};
+    for (const p of Object.keys(market.SNIIM_PRODUCTS)) results[p] = await market.refreshPrice(db, p, { now: t, fetchImpl });
+    return { results };
   });
 
   route('GET', '/api/health', ({ t }) => ({ ok: true, server_now: t }));

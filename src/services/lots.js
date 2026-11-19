@@ -5,7 +5,7 @@ import { tx } from '../db.js';
 import { HttpError, bad } from '../http.js';
 import { validateLot, num } from '../validate.js';
 import { discountPct, haversineKm, pesosToCents, kgToGrams } from '../../public/js/shared/calc.js';
-import { municipality } from '../../public/js/shared/catalog.js';
+import { municipality, normalize } from '../../public/js/shared/catalog.js';
 
 export const URGENT_MS = 6 * 3600e3; // "próximo a vencer": menos de 6 horas
 const CLOSED_VISIBLE_MS = 24 * 3600e3; // agotados/vencidos se muestran 24 h más como referencia
@@ -68,6 +68,8 @@ export function serializeLot(l, now, { viewer, from } = {}) {
     producer: { id: l.producer_id, name: l.producer_business || l.producer_name },
     is_demo: !!l.is_demo,
     input_method: l.input_method,
+    ref_source: l.ref_source,
+    ref_market: l.ref_market_json ? JSON.parse(l.ref_market_json) : null,
     shelf: l.shelf_json ? JSON.parse(l.shelf_json) : null,
   };
   if (from && muni) out.distance_km = haversineKm(from, muni);
@@ -138,29 +140,56 @@ function savePhoto(dataUrl, uploadsDir) {
   return `/uploads/${name}`;
 }
 
+function insertLot(db, now, producer, v, photo, isDemo, body) {
+  // El precio de referencia sólo se marca "SNIIM" si coincide con el último precio guardado del SNIIM.
+  let refSource = 'declarado';
+  let refMarket = null;
+  if (body.ref_source === 'sniim') {
+    const m = db.prepare('SELECT * FROM market_prices WHERE product = ? ORDER BY fetched_at DESC LIMIT 1').get(normalize(v.product));
+    if (m && Math.abs(m.freq_c - v.ref_price_c) <= 50) {
+      refSource = 'sniim';
+      refMarket = JSON.stringify({ variety: m.variety, market: m.market, date: m.price_date, freq_c: m.freq_c, scope: m.scope });
+    }
+  }
+  const r = db
+    .prepare(
+      `INSERT INTO lots (producer_id, product, category, quality, total_g, available_g, min_g, allow_partial,
+        ref_price_c, rescue_price_c, original_rescue_price_c, fresh_hours, expires_at, municipality, pickup_point,
+        pickup_window, producer_transport, notes, photo, status, declaration_ok, is_demo, created_at, input_method, shelf_json, ref_source, ref_market_json)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activo',1,?,?,?,?,?,?)`,
+    )
+    .run(
+      producer.id, v.product, v.category, v.quality, v.total_g, v.total_g, v.min_g, v.allow_partial,
+      v.ref_price_c, v.rescue_price_c, v.rescue_price_c, v.fresh_hours, now + v.fresh_hours * 3600e3,
+      v.municipality, v.pickup_point || producer.pickup_point, v.pickup_window, v.producer_transport, v.notes,
+      photo, isDemo, now, v.input_method, v.shelf_json, refSource, refMarket,
+    );
+  const id = Number(r.lastInsertRowid);
+  db.prepare('INSERT INTO inventory_movements (lot_id, delta_g, reason, created_at) VALUES (?,?,?,?)').run(id, v.total_g, 'publicacion', now);
+  return id;
+}
+
 export function createLot(db, now, producer, body, { uploadsDir, isDemo = 0 } = {}) {
   const v = validateLot({ municipality: producer.municipality, ...body });
   const photo = savePhoto(body.photo, uploadsDir);
-  return tx(db, () => {
-    const r = db
-      .prepare(
-        `INSERT INTO lots (producer_id, product, category, quality, total_g, available_g, min_g, allow_partial,
-          ref_price_c, rescue_price_c, original_rescue_price_c, fresh_hours, expires_at, municipality, pickup_point,
-          pickup_window, producer_transport, notes, photo, status, declaration_ok, is_demo, created_at, input_method, shelf_json)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activo',1,?,?,?,?)`,
-      )
-      .run(
-        producer.id, v.product, v.category, v.quality, v.total_g, v.total_g, v.min_g, v.allow_partial,
-        v.ref_price_c, v.rescue_price_c, v.rescue_price_c, v.fresh_hours, now + v.fresh_hours * 3600e3,
-        v.municipality, v.pickup_point || producer.pickup_point, v.pickup_window, v.producer_transport, v.notes,
-        photo, isDemo, now, v.input_method, v.shelf_json,
-      );
-    const id = Number(r.lastInsertRowid);
-    db.prepare('INSERT INTO inventory_movements (lot_id, delta_g, reason, created_at) VALUES (?,?,?,?)').run(
-      id, v.total_g, 'publicacion', now,
-    );
-    return id;
+  return tx(db, () => insertLot(db, now, producer, v, photo, isDemo, body));
+}
+
+/** Varios productos de un mismo dictado: se validan todos y se guardan juntos (todo o nada). */
+export function createLots(db, now, producer, list, { uploadsDir } = {}) {
+  if (!Array.isArray(list) || !list.length) throw bad('No hay productos para publicar');
+  if (list.length > 8) throw bad('Máximo 8 productos por publicación');
+  const valid = list.map((b, i) => {
+    try {
+      return validateLot({ municipality: producer.municipality, ...b });
+    } catch (e) {
+      e.message = `Producto ${i + 1}${b.product ? ` (${b.product})` : ''}: ${e.message}`;
+      e.fields = { index: i, ...e.fields };
+      throw e;
+    }
   });
+  const photos = list.map((b) => savePhoto(b.photo, uploadsDir));
+  return tx(db, () => valid.map((v, i) => insertLot(db, now, producer, v, photos[i], 0, list[i])));
 }
 
 function ownLot(db, user, id) {

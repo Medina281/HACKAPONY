@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { $, e, mxn, kg, orderPill, fmtDate, toast, waLink, timer } from '../ui.js';
-import { qualityLabel, municipality } from '../shared/catalog.js';
+import { qualityLabel, municipality, MUNICIPALITIES } from '../shared/catalog.js';
+import { haversineKm, ROAD_FACTOR, netSavings, pesosToCents } from '../shared/calc.js';
 import { reportDialog } from './lot.js';
 
 const STEPS = ['apartado', 'confirmado', 'listo', 'recolectado'];
@@ -59,7 +60,9 @@ export default async function orderView({ app, params, state }) {
           <p class="tiny muted">“Cómo llegar” busca la referencia escrita por el productor; confirma la ubicación exacta por WhatsApp.</p>
         </div>` : ''}
 
-        ${isProducer && active ? `<div class="card stack" style="background:var(--cream)">
+        ${deliveryBlock(o, isBuyer, isProducer, active, state)}
+
+        ${isProducer && active && !(o.delivery && ['asignada', 'recogida'].includes(o.delivery.status)) ? `<div class="card stack" style="background:var(--cream)">
           ${o.status === 'apartado' ? `<button class="btn block" data-act="confirmar">✔️ Confirmar pedido</button>` : ''}
           ${o.status === 'confirmado' ? `<button class="btn secondary block" data-act="listo">📦 Marcar listo para recoger</button>` : ''}
           ${o.status !== 'apartado' ? `<form id="deliver" class="stack"><label for="code">Código que te dicta el comprador</label>
@@ -100,4 +103,80 @@ export default async function orderView({ app, params, state }) {
     if (confirm('¿Seguro que quieres cancelar este pedido?')) act('cancelar', { reason: ev.target.reason.value });
   });
   $('#report').addEventListener('click', () => reportDialog({ folio: o.folio }));
+
+  // ---------- Flete ----------
+  $('#askTruck')?.addEventListener('click', () => { $('#truckForm').hidden = false; $('#askTruck').hidden = true; });
+  $('#truckForm')?.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const fd = Object.fromEntries(new FormData(ev.target));
+    try {
+      await api('/api/deliveries', { method: 'POST', body: { ...fd, folio: o.folio, needs_cold: !!fd.needs_cold } });
+      toast('Listo: avisamos a transportistas cercanos 🚚', 'ok');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+  $('#cancelTruck')?.addEventListener('click', async () => {
+    try {
+      await api(`/api/deliveries/${o.delivery.id}/cancel`, { method: 'POST', body: { reason: 'Lo recojo yo' } });
+      toast('Flete cancelado');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+  $('#handoff')?.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      await api(`/api/deliveries/${o.delivery.id}/handoff`, { method: 'POST', body: { code: ev.target.code.value } });
+      toast('Producto entregado al transportista 🚚', 'ok');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+}
+
+const DSTATUS = { abierta: 'Buscando transportista…', asignada: 'Transportista asignado', recogida: 'En camino 🚚', entregada: 'Entregado por transportista', cancelada: 'Flete cancelado' };
+
+function deliveryBlock(o, isBuyer, isProducer, active, state) {
+  const d = o.delivery && o.delivery.status !== 'cancelada' ? o.delivery : null;
+  if (!d) {
+    if (!(isBuyer && active)) return '';
+    const from = municipality(o.municipality);
+    const to = municipality(state.user.municipality);
+    const km = Math.round(haversineKm(from, to) * ROAD_FACTOR * 10) / 10;
+    const t = JSON.parse(localStorage.getItem('rd_transport') || '{}');
+    const fuel = netSavings({ savingsCents: 0, distanceKm: km, kmPerLiter: t.kmPerLiter || 10, pricePerLiterCents: pesosToCents(t.pricePerLiter || 24) }).transportCents;
+    return `<div class="card stack">
+      <div class="row between"><strong>🚚 ¿Te lo llevan?</strong><span class="mono-tag">opcional</span></div>
+      <p class="small muted" style="margin:0">Un transportista independiente de la zona puede recogerlo y llevarlo a tu negocio. Tú ofreces el pago.</p>
+      <button class="btn secondary" id="askTruck">Pedir transportista</button>
+      <form id="truckForm" class="stack" hidden>
+        <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
+        <div class="two">
+          <div class="field"><label for="to_muni">Municipio</label><select id="to_muni" name="to_muni">${MUNICIPALITIES.map((m) => `<option value="${m.id}" ${m.id === state.user.municipality ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select></div>
+          <div class="field"><label for="fee">Ofreces pagar</label><div class="input-unit"><input id="fee" name="fee" inputmode="decimal" placeholder="Ej. 150"><span>$</span></div></div>
+        </div>
+        <p class="tiny muted" style="margin:0">Referencia: la gasolina ida y vuelta (~${km * 2} km) costaría unos ${mxn(fuel)} con tus valores de la calculadora; no incluye el tiempo del transportista.</p>
+        <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
+        <input name="notes" placeholder="Notas (opcional): horario, referencias…">
+        <button class="btn">Publicar flete</button>
+      </form>
+    </div>`;
+  }
+  const c = d.carrier;
+  return `<div class="card stack">
+    <div class="row between"><strong>🚚 Flete</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
+    <div class="small">${mxn(d.fee_c)} · a ${e(d.address)}${d.needs_cold ? ' · ❄️' : ''}</div>
+    ${c ? `<div class="small">${e(c.name)} · ${e(c.vehicle || '')}</div>
+      ${d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}">💬 WhatsApp al transportista</a>` : ''}` : ''}
+    ${isProducer && d.status === 'asignada' ? `<form id="handoff" class="stack"><label for="hcode">Código que te dice el transportista</label>
+      <input id="hcode" name="code" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:1.4rem;letter-spacing:.3em;text-align:center;font-weight:800">
+      <button class="btn">📦 Entregar al transportista</button>
+      ${o.status === 'apartado' ? '<p class="tiny muted" style="margin:0">Primero confirma el pedido.</p>' : ''}</form>` : ''}
+    ${isBuyer && ['abierta', 'asignada'].includes(d.status) ? '<button class="btn ghost sm" id="cancelTruck">Cancelar flete (lo recojo yo)</button>' : ''}
+    ${isBuyer && d.status === 'recogida' ? '<p class="small" style="margin:0">Cuando llegue, dale tu <strong>código de entrega</strong> al transportista.</p>' : ''}
+  </div>`;
 }

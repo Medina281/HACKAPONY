@@ -17,7 +17,7 @@ export function lotCard(l, { owner = false } = {}) {
     </a>
     <div class="lot-body">
       <div class="lot-title"><h3>${e(l.product)}</h3>${l.is_demo ? '<span class="pill demo" title="Dato de demostración">demo</span>' : ''}</div>
-      <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans);font-weight:500">/kg</span><s>${mxn(l.ref_price_c)} habitual*</s></div>
+      <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans);font-weight:500">/kg</span><s>${mxn(l.ref_price_c)} ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'}</s></div>
       <div class="meta"><span>👩‍🌾 ${e(l.producer.name)}</span><span>🏘️ ${e(l.municipality_name)}</span>${dist}</div>
       <div class="meta"><span>🌿 ${e(qualityLabel(l.quality))}</span>${l.producer_transport ? '<span>🚚 Productor puede llevarlo</span>' : ''}</div>
       <div class="row between small"><span><strong>${kg(l.available_g)}</strong> de ${kg(l.total_g)} disponibles</span><span>⏱ ${timer(l.expires_at)}</span></div>

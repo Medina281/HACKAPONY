@@ -1,9 +1,10 @@
 import { api } from '../api.js';
 import { onLeave } from '../app.js';
-import { $, $$, e, mxn, toast, fieldErrors, shrinkImage, waLink, shareText, muniOptions } from '../ui.js';
+import { $, $$, e, mxn, toast, fieldErrors, waLink, shareText, muniOptions } from '../ui.js';
 import { PRODUCTS, QUALITY, CATEGORIES, normalize, municipality, qualityLabel } from '../shared/catalog.js';
 import { orderTotals, discountPct, kgToGrams, pesosToCents } from '../shared/calc.js';
-import { parseSpoken } from '../shared/parse.js';
+import { parseSpoken, parseMulti } from '../shared/parse.js';
+import { takePhoto, standardizeFile, canUseCamera } from '../camera.js';
 import { estimateShelfLife, CLASS_LABEL } from '../shared/shelf.js';
 import { getForecast, manualForecast, MANUAL_CLIMATES, WEATHER_CREDIT } from '../weather.js';
 import { mountAssistant } from '../voice/assistant.js';
@@ -79,6 +80,16 @@ export default async function publish({ app, query, state }) {
         ${templates.length ? `<div><div class="small muted">Mis plantillas</div><div class="chips">${templates.map((t) => `<button type="button" class="chip" data-tpl="${t.id}">⭐ ${e(t.name)}</button>`).join('')}</div></div>` : ''}
 
         <div class="card" id="formCard">
+          <div class="field photo-field">
+            <div class="photo-slot" id="photoSlot"><span>📷</span><small>Foto real del producto (opcional)</small></div>
+            <div class="row">
+              <button type="button" class="btn grow" id="camBtn">📷 Tomar foto</button>
+              <button type="button" class="btn ghost" id="galBtn" aria-label="Elegir de la galería">🖼️</button>
+              <button type="button" class="btn ghost" id="delPhoto" hidden aria-label="Quitar foto">✕</button>
+            </div>
+            <input type="file" id="photo" accept="image/*" hidden>
+            <div class="err" data-for="photo"></div>
+          </div>
           <div class="field"><label for="product">1. ¿Qué producto?</label>
             <div class="chips" id="quick">${QUICK.map((n) => `<button type="button" class="chip" data-p="${n}">${PRODUCTS.find((p) => p.name === n).icon} ${n}</button>`).join('')}</div>
             <input id="product" name="product" list="plist" value="${v('product')}" placeholder="Escribe o elige arriba" autocomplete="off">
@@ -93,6 +104,7 @@ export default async function publish({ app, query, state }) {
             <div class="field"><label for="ref_price">3. Precio de siempre</label>
               <div class="input-unit"><input id="ref_price" name="ref_price" inputmode="decimal" value="${v('ref_price')}" placeholder="25"><span>$/kg</span></div>
               <div class="hint">Al que normalmente lo vendes.</div><div class="err" data-for="ref_price"></div>
+              <div class="sniim" id="sniimBox" aria-live="polite"></div>
             </div>
             <div class="field"><label for="rescue_price">4. Precio de rescate</label>
               <div class="input-unit"><input id="rescue_price" name="rescue_price" inputmode="decimal" value="${v('rescue_price')}" placeholder="12"><span>$/kg</span></div>
@@ -115,7 +127,6 @@ export default async function publish({ app, query, state }) {
         </div>
 
         <details class="more" ${initial.notes || initial.pickup_window ? 'open' : ''}><summary>Más detalles (opcional)</summary>
-          <div class="field" style="margin-top:10px"><label for="photo">📷 Foto</label><input type="file" id="photo" accept="image/*" capture="environment"><div class="hint">Se reduce en tu teléfono antes de enviarse para gastar menos datos.</div><div class="err" data-for="photo"></div><img id="photoPrev" alt="" style="max-height:140px;border-radius:12px;margin-top:8px" hidden></div>
           <div class="two">
             <div class="field"><label for="min_kg">Compra mínima</label><div class="input-unit"><input id="min_kg" name="min_kg" inputmode="decimal" value="${v('min_kg')}" placeholder="1"><span>kg</span></div><div class="err" data-for="min_kg"></div></div>
             <div class="field"><label for="category">Categoría</label><select id="category" name="category">${CATEGORIES.map((c) => `<option value="${c.id}" ${initial.category === c.id ? 'selected' : ''}>${e(c.label)}</option>`).join('')}</select></div>
@@ -252,7 +263,7 @@ export default async function publish({ app, query, state }) {
   }
 
   async function doPublish() {
-    const body = { ...get(), photo, input_method: method, shelf: shelf ? { ...shelf, source: forecast?.source } : null };
+    const body = { ...get(), photo, input_method: method, ref_source: refSource, shelf: shelf ? { ...shelf, source: forecast?.source } : null };
     const { lot } = await api('/api/lots', { method: 'POST', body });
     localStorage.removeItem(DRAFT);
     const secs = start ? Math.round((Date.now() - start) / 1000) : null;
@@ -267,10 +278,81 @@ export default async function publish({ app, query, state }) {
     return lot;
   }
 
+  async function publishMany(list) {
+    const lotsBody = list.map((d) => {
+      const est = forecast ? estimateShelfLife({ product: d.product, quality: d.quality, temps: forecast.temps, humidity: forecast.humidity }) : null;
+      return { ...d, input_method: 'voz', shelf: est ? { ...est, source: forecast.source } : null };
+    });
+    const { lots } = await api('/api/lots/batch', { method: 'POST', body: { lots: lotsBody } });
+    localStorage.removeItem(DRAFT);
+    assistant.destroy();
+    app.innerHTML = `<div class="wrap page" style="max-width:640px">
+      <div class="ticket"><div class="ticket-head"><h1>¡${lots.length} ofertas publicadas! 🌱</h1><p style="margin:0">Cada producto tiene su propio temporizador.</p></div>
+      <div class="ticket-body stack">
+        <div class="grid">${lots.map((l) => lotCard(l, { owner: true })).join('')}</div>
+        <a class="btn wa big" target="_blank" rel="noopener" href="${waLink('', lots.map(shareText).join('\n\n'))}">📤 Compartir todo por WhatsApp</a>
+        <div class="two"><a class="btn secondary" href="#/productor">Ir a mi panel</a><a class="btn ghost" href="#/publicar?nuevo=${Date.now()}">Publicar otro</a></div>
+      </div></div></div>`;
+    return lots;
+  }
+
+  // ---------- Precio de mercado SNIIM ----------
+  let refSource = 'declarado';
+  let sniim = null;
+  let sniimFor = null;
+  let sniimTimer;
+  async function loadSniim() {
+    const box = $('#sniimBox');
+    const p = f.product.value.trim();
+    if (!box || !p || p === sniimFor) return;
+    sniimFor = p;
+    box.innerHTML = '<span class="tiny muted">Consultando precio SNIIM…</span>';
+    try {
+      const { price } = await api(`/api/market/${encodeURIComponent(p)}`);
+      if (f.product.value.trim() !== p) return;
+      sniim = price.available ? price : null;
+      if (price.available) {
+        box.innerHTML = `<div class="sniim-card"><span class="mono-tag">SNIIM</span>
+          <div><strong>${mxn(price.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente · ${e(price.variety)} · ${e(price.scope === 'morelia' ? price.market : price.market + ' (no hay dato de Morelia)')} · ${e(price.date || '')}</span></div>
+          <button type="button" class="btn sm secondary" data-usesniim>Usar</button></div>
+          <a class="tiny" href="${e(price.sniim_url)}" target="_blank" rel="noopener">Fuente: SNIIM, Secretaría de Economía</a>`;
+      } else {
+        box.innerHTML = `<span class="tiny muted">${e(price.reason)} <a href="${e(price.sniim_url)}" target="_blank" rel="noopener">Ver SNIIM</a></span>`;
+        if (price.updating) { sniimFor = null; clearTimeout(sniimTimer); sniimTimer = setTimeout(loadSniim, 6000); }
+      }
+    } catch {
+      box.innerHTML = '';
+      sniimFor = null;
+    }
+  }
+
+  // ---------- Foto: cámara primero, galería como respaldo; mismo formato 4:3 ----------
+  function showPhoto() {
+    const slot = $('#photoSlot');
+    slot.innerHTML = photo ? `<img src="${photo}" alt="Foto del producto">` : '<span>📷</span><small>Foto real del producto (opcional)</small>';
+    slot.classList.toggle('has', !!photo);
+    $('#delPhoto').hidden = !photo;
+    $('#camBtn').textContent = photo ? '📷 Tomar otra' : '📷 Tomar foto';
+    update();
+  }
+  $('#camBtn').addEventListener('click', async () => {
+    if (!canUseCamera()) return $('#photo').click();
+    try {
+      const shot = await takePhoto();
+      if (shot) (photo = shot), showPhoto();
+    } catch {
+      toast('No se pudo abrir la cámara; elige una foto de tu teléfono');
+      $('#photo').click();
+    }
+  });
+  $('#galBtn').addEventListener('click', () => $('#photo').click());
+  $('#delPhoto').addEventListener('click', () => { photo = null; showPhoto(); });
+
   // ---------- Asistente de voz ----------
-  const formApi = { get, set, update, autoCategory };
+  const formApi = { get, set, update, autoCategory, meta: { pending_prices: [] } };
+  const estimate = (product, quality) => (forecast ? estimateShelfLife({ product, quality, temps: forecast.temps, humidity: forecast.humidity }) : null);
   const assistant = mountAssistant({
-    form: formApi, user, summaryHtml, getShelf: () => shelf,
+    form: formApi, user, summaryHtml, getShelf: () => shelf, estimate, publishMany,
     publish: () => { method = 'voz'; return doPublish(); },
     showForm: () => $('#formCard').scrollIntoView({ behavior: 'smooth' }),
   });
@@ -284,13 +366,23 @@ export default async function publish({ app, query, state }) {
       set(blank, ev.target.value);
       method = 'frase';
     }
-    if (ev.target.name === 'product' || blank === 'product') autoCategory();
+    if (ev.target.name === 'product' || blank === 'product') {
+      autoCategory();
+      clearTimeout(sniimTimer);
+      sniimTimer = setTimeout(loadSniim, 500);
+    }
+    if (ev.target.name === 'ref_price' || blank === 'ref_price') refSource = 'declarado';
     update();
   });
   f.addEventListener('click', (ev) => {
-    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl],button[data-clima],button[data-useshelf]');
+    const b = ev.target.closest('button[data-p],button[data-h],button[data-d],button[data-tpl],button[data-clima],button[data-useshelf],button[data-usesniim]');
     if (!b) return;
-    if (b.dataset.p) (set('product', b.dataset.p), autoCategory());
+    if (b.dataset.p) (set('product', b.dataset.p), autoCategory(), loadSniim());
+    if ('usesniim' in b.dataset && sniim) {
+      set('ref_price', sniim.freq_c / 100);
+      refSource = 'sniim';
+      toast('Precio de referencia tomado del SNIIM', 'ok');
+    }
     if (b.dataset.h) set('hours', b.dataset.h);
     if ('useshelf' in b.dataset && shelf) set('hours', shelf.hours);
     if (b.dataset.clima) forecast = manualForecast(Number(b.dataset.clima));
@@ -324,6 +416,7 @@ export default async function publish({ app, query, state }) {
   $('#fill').addEventListener('click', () => {
     const text = $('#speech').value.trim();
     if (!text) return toast('Pega primero tu mensaje', 'error');
+    if (parseMulti(text).length > 1) return assistant.open({ text }); // varios productos → se arman en el asistente
     const r = parseSpoken(text);
     for (const k of ['product', 'kg', 'rescue_price', 'ref_price', 'hours', 'quality', 'min_kg', 'municipality']) if (r[k] != null) set(k, r[k]);
     if (r.product) autoCategory();
@@ -339,10 +432,9 @@ export default async function publish({ app, query, state }) {
     const file = ev.target.files[0];
     if (!file) return;
     try {
-      photo = await shrinkImage(file);
-      $('#photoPrev').src = photo;
-      $('#photoPrev').hidden = false;
-      update();
+      photo = await standardizeFile(file);
+      ev.target.value = '';
+      showPhoto();
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -389,4 +481,5 @@ export default async function publish({ app, query, state }) {
   });
 
   update();
+  if (f.product.value) loadSniim();
 }

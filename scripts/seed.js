@@ -7,6 +7,7 @@ import { openDb } from '../src/db.js';
 import { hashPassword } from '../src/auth.js';
 import { createLot } from '../src/services/lots.js';
 import { reserve, transition } from '../src/services/orders.js';
+import { requestDelivery, actOnDelivery } from '../src/services/deliveries.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -37,6 +38,11 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   addUser('mercadito', { role: 'comprador', name: 'Luis Cárdenas', business: 'Frutería El Mercadito', type: 'fruteria', phone: '4430000102', muni: 'morelia' });
   addUser('juguera', { role: 'comprador', name: 'Ana Villaseñor', business: 'Juguería La Huerta', type: 'jugueria', phone: '4430000103', muni: 'tarimbaro' });
   addUser('comedor', { role: 'comprador', name: 'Martín Ochoa', business: 'Comedor Los Arcos', type: 'comedor', phone: '4430000104', muni: 'morelia' });
+  addUser('fletes1', { role: 'transportista', name: 'Raúl Pérez', phone: '4430000201', email: 'transportista@demo.mx', muni: 'morelia' });
+  addUser('fletes2', { role: 'transportista', name: 'Sofía Guzmán', phone: '4430000202', muni: 'tarimbaro' });
+  db.prepare("UPDATE users SET vehicle='Camioneta 3.5 t', capacity_kg=1500, refrigerated=0, radius_km=60 WHERE phone='4430000201'").run();
+  db.prepare("UPDATE users SET vehicle='Camioneta refrigerada', capacity_kg=800, refrigerated=1, radius_km=80 WHERE phone='4430000202'").run();
+  for (const k of ['fletes1', 'fletes2']) users[k] = db.prepare('SELECT * FROM users WHERE id = ?').get(users[k].id);
   addUser('admin', { role: 'admin', name: 'Administración Raíz Directa', phone: '4430000999', email: 'admin@demo.mx', muni: 'morelia' });
 
   const opts = { uploadsDir: uploadsDir || path.join(ROOT, 'data', 'uploads'), isDemo: 1 };
@@ -67,6 +73,18 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   deliver(order('lupe', old3, 15, d1 + H), 'cuitzeo', d1 + 2 * H);
   const old4 = lot('encinos', d1, { product: 'Aguacate', category: 'fruta', quality: 'maduro', kg: 80, ref_price: 48, rescue_price: 30, hours: 22, min_kg: 5 });
   deliver(order('mercadito', old4, 40, d1 + H), 'encinos', d1 + 3 * H);
+  // Flete histórico: aguacate de Uruapan llevado a Morelia por el transportista demo
+  const fol = order('lupe', old4, 20, d1 + 1.5 * H, 5);
+  const oid = db.prepare('SELECT id FROM orders WHERE folio = ?').get(fol).id;
+  const did = requestDelivery(db, d1 + 1.6 * H, users.lupe, { folio: fol, address: 'Av. Madero Poniente 1200, Centro (ficticio)', fee: 450, to_muni: 'morelia' });
+  db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(did);
+  actOnDelivery(db, d1 + 1.7 * H, users.fletes1, did, 'accept');
+  transition(db, d1 + 1.8 * H, users.encinos, fol, 'confirmar');
+  const pc = db.prepare('SELECT pickup_code FROM deliveries WHERE id = ?').get(did).pickup_code;
+  actOnDelivery(db, d1 + 2.5 * H, users.encinos, did, 'handoff', { code: pc });
+  const dc = db.prepare('SELECT delivery_code FROM orders WHERE id = ?').get(oid).delivery_code;
+  actOnDelivery(db, d1 + 4.5 * H, users.fletes1, did, 'deliver', { code: dc });
+
   // Lote que venció sin venderse por completo (merma visible en el dashboard)
   lot('zina', now - 30 * H, { product: 'Guayaba', category: 'fruta', quality: 'proximo', kg: 30, ref_price: 20, rescue_price: 10, hours: 26 });
 
@@ -86,7 +104,9 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
   order('comedor', sold, 40, t + 60e3, 3);
   // Pedido activo para el comprador demo
   const papa = db.prepare("SELECT id FROM lots WHERE product='Papa' AND expires_at > ?").get(now).id;
-  order('lupe', papa, 30, t + 2 * 60e3, 4);
+  const papaFolio = order('lupe', papa, 30, t + 2 * 60e3, 4);
+  const openDid = requestDelivery(db, t + 3 * 60e3, users.lupe, { folio: papaFolio, address: 'Calle Allende 345, Centro, Morelia (ficticio)', fee: 380, to_muni: 'morelia', notes: 'Entregar por la puerta lateral' });
+  db.prepare('UPDATE deliveries SET is_demo = 1 WHERE id = ?').run(openDid);
   // Pedido pendiente de confirmar para un productor (panel con algo que atender)
   const guay = db.prepare("SELECT id FROM lots WHERE product='Guayaba' AND expires_at > ?").get(now).id;
   order('juguera', guay, 15, t + 3 * 60e3, 3);

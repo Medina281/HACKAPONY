@@ -16,6 +16,10 @@ const routes = [
   ['/pedido/:folio', () => import('./views/order.js'), { auth: true }],
   ['/perfil', () => import('./views/profile.js'), { auth: true }],
   ['/admin', () => import('./views/admin.js'), { role: 'admin' }],
+  ['/transportista', () => import('./views/carrier.js'), { role: 'transportista' }],
+  ['/flete/:id', () => import('./views/trip.js'), { auth: true }],
+  ['/privacidad', () => import('./views/legal.js'), { page: 'privacidad' }],
+  ['/creditos', () => import('./views/legal.js'), { page: 'creditos' }],
 ];
 
 export const state = { user: null, unread: null };
@@ -25,17 +29,19 @@ export const go = (hash) => (location.hash = hash);
 
 const NAV = {
   guest: [['#/ofertas', '🧺', 'Ofertas'], ['#/mapa', '🗺️', 'Mapa'], ['#/impacto', '📊', 'Impacto'], ['#/entrar', '👤', 'Entrar']],
-  productor: [['#/productor', '🏠', 'Inicio'], ['#/publicar', '➕', 'Publicar'], ['#/productor/pedidos', '📦', 'Pedidos'], ['#/ofertas', '🧺', 'Ofertas'], ['#/perfil', '👤', 'Perfil']],
-  comprador: [['#/ofertas', '🧺', 'Ofertas'], ['#/mapa', '🗺️', 'Mapa'], ['#/comprador', '📦', 'Mis pedidos'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
+  productor: [['#/productor', '🏠', 'Inicio'], ['#/productor/pedidos', '📦', 'Pedidos'], ['#/publicar', '＋', 'Publicar', true], ['#/ofertas', '🧺', 'Ofertas'], ['#/perfil', '👤', 'Perfil']],
+  comprador: [['#/ofertas', '🧺', 'Ofertas'], ['#/mapa', '🗺️', 'Mapa'], ['#/comprador', '📦', 'Pedidos'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
+  transportista: [['#/transportista', '🚚', 'Viajes'], ['#/transportista?tab=mios', '🧭', 'Mis viajes'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
   admin: [['#/admin', '🛡️', 'Admin'], ['#/ofertas', '🧺', 'Ofertas'], ['#/impacto', '📊', 'Impacto'], ['#/perfil', '👤', 'Perfil']],
 };
 
 export function renderNav() {
   const items = NAV[state.user?.role || 'guest'];
-  const cur = '#' + (location.hash.slice(1).split('?')[0] || '/');
-  const isActive = (h) => cur === h || (h !== '#/' && cur.startsWith(h + '/') && h !== '#/productor');
+  const full = '#' + (location.hash.slice(1) || '/');
+  const cur = full.split('?')[0];
+  const isActive = (h) => (h.includes('?') ? full === h : cur === h && !(h === '#/transportista' && full.includes('tab=mios'))) || (h !== '#/' && cur.startsWith(h + '/') && h !== '#/productor');
   $('#bottomnav').innerHTML = items
-    .map(([h, i, l]) => `<a href="${h}" class="${isActive(h) ? 'active' : ''}"><span aria-hidden="true">${i}</span>${e(l)}</a>`)
+    .map(([h, i, l, fab]) => `<a href="${h}" class="${fab ? 'fab' : isActive(h) ? 'active' : ''}" aria-label="${e(l)}"><span aria-hidden="true">${i}</span>${fab ? '' : e(l)}</a>`)
     .join('');
   $('#topnav').innerHTML = items
     .map(([h, , l]) => `<a href="${h}" class="${isActive(h) ? 'active' : ''}">${e(l)}</a>`)
@@ -150,7 +156,7 @@ export function afterLogin(user) {
   localStorage.setItem('rd_user', JSON.stringify(user));
   const next = sessionStorage.getItem('rd_after_login');
   sessionStorage.removeItem('rd_after_login');
-  go(next || (user.role === 'productor' ? '#/productor' : user.role === 'admin' ? '#/admin' : '#/ofertas'));
+  go(next || ({ productor: '#/productor', admin: '#/admin', transportista: '#/transportista' }[user.role] || '#/ofertas'));
   pollNotifications();
 }
 

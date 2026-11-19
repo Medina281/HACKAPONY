@@ -26,8 +26,9 @@ export default async function lotView({ app, params, state }) {
           <div class="lot-media" style="height:220px;font-size:6rem">${media(l.photo, l.product)}${statePill(l.state)}<span class="disc">−${Math.round(l.discount)}%</span></div>
           <div class="lot-body">
             <div class="row between"><h1 style="margin:0">${e(l.product)}</h1>${l.is_demo ? '<span class="pill demo">dato de demostración</span>' : ''}</div>
-            <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans)">/kg</span><s>${mxn(l.ref_price_c)} habitual*</s></div>
+            <div class="price">${mxn(l.rescue_price_c)}<span class="small muted" style="font-family:var(--sans)">/kg</span><s>${mxn(l.ref_price_c)} ${l.ref_source === 'sniim' ? 'SNIIM' : 'habitual*'}</s></div>
             <div class="row"><span>⏱ Frescura comercial estimada:</span> ${timer(l.expires_at)}</div>
+            <div id="mkt" class="sniim"></div>
             <dl class="kv">
               <dt>Disponible</dt><dd>${kg(l.available_g)} de ${kg(l.total_g)}</dd>
               <dt>Compra mínima</dt><dd>${l.allow_partial ? kg(l.min_g) : 'Sólo lote completo'}</dd>
@@ -50,6 +51,16 @@ export default async function lotView({ app, params, state }) {
       <div class="aside stack" id="side"></div>
     </div>
   </div>`;
+
+  // Comparar con el precio de mercado oficial (SNIIM)
+  api(`/api/market/${encodeURIComponent(l.product)}`).then(({ price: p }) => {
+    const box = $('#mkt');
+    if (!box) return;
+    box.innerHTML = p.available
+      ? `<div class="sniim-card"><span class="mono-tag">SNIIM</span><div><strong>${mxn(p.freq_c)}/kg</strong> <span class="tiny muted">precio frecuente de mayoreo · ${e(p.variety)} · ${e(p.market)} · ${e(p.date || '')}</span></div>
+         ${l.rescue_price_c < p.freq_c ? `<span class="pill ok">${Math.round((1 - l.rescue_price_c / p.freq_c) * 100)}% abajo del mercado</span>` : '<span class="pill muted">no está abajo del mercado</span>'}</div>`
+      : `<span class="tiny muted">Precio SNIIM no disponible ahora. <a href="${e(p.sniim_url)}" target="_blank" rel="noopener">Consultar SNIIM</a></span>`;
+  }).catch(() => {});
 
   const side = $('#side');
   if (isOwner) return ownerPanel(side, l, app, state);
