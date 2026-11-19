@@ -247,3 +247,21 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color:
 /* Evita desbordes horizontales en móvil: los hijos de grid/flex pueden encogerse */
 .layout-2 > *, .stack > *, .grid > *, .two > * { min-width: 0; }
 .chips { max-width: 100%; }
+
+/* Publicación rápida: voz principal, escritura secundaria */
+.quick { background: var(--white); }
+.voice { display: flex; gap: 14px; align-items: center; }
+.mic-big { flex: none; width: 68px; height: 68px; border-radius: 50%; border: 0; background: var(--green); color: #fff; font-size: 1.8rem; cursor: pointer; box-shadow: 0 0 0 6px var(--green-soft); transition: transform .1s; }
+.mic-big:active { transform: scale(.95); }
+.mic-big.rec { background: var(--red); box-shadow: 0 0 0 6px var(--red-soft); animation: pulse 1s infinite; }
+#heard { background: var(--cream); border-radius: 10px; padding: 8px 12px; margin-top: 10px; }
+.link-toggle { margin-top: 12px; background: none; border: 0; padding: 6px 0; min-height: 36px; font: 600 .95rem var(--sans); color: var(--green); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.write-box { margin-top: 6px; padding: 16px; border-radius: 12px; background: var(--cream); border: 1px solid var(--line); }
+.phrase { font-family: var(--serif); font-size: 1.3rem; line-height: 2.3; color: var(--ink); margin: 0 0 6px; }
+.phrase .soft { color: var(--ink-2); }
+.phrase .cur { white-space: nowrap; }
+.blank { width: auto; min-height: 0; display: inline-block; padding: 0 4px; margin: 0 2px; border: 0; border-bottom: 2px dashed var(--green-2); border-radius: 0; background: transparent; font: 700 1.2rem var(--sans); color: var(--green); text-align: center; vertical-align: baseline; }
+.blank:focus { border-bottom: 2px solid var(--terra); background: var(--white); border-radius: 6px 6px 0 0; }
+.blank::placeholder { color: #b3ab97; font-weight: 500; }
+.paste { margin-top: 10px; }
+.paste summary { cursor: pointer; font-size: .88rem; color: var(--ink-2); min-height: 32px; }

@@ -42,14 +42,32 @@ export default async function publish({ app, query, state }) {
         <div><h1 style="margin:0">Publicar producto</h1><p class="muted">5 datos y listo. Lo demás es opcional.</p></div>
         ${source ? `<div class="notice info">${source} <button type="button" class="btn ghost sm" id="discard">Empezar de cero</button></div>` : ''}
 
-        <div class="card stack">
-          <label for="speech">🎙️ Dímelo como lo dirías por WhatsApp <span class="muted small">(opcional)</span></label>
-          <div class="row" style="flex-wrap:nowrap;align-items:stretch">
-            <textarea id="speech" placeholder="Ej.: Tengo 100 kilos de jitomate a 12 pesos el kilo, normalmente lo vendo a 25, me quedan 24 horas" style="min-height:70px"></textarea>
-            <button type="button" class="btn mic" id="mic" aria-label="Dictar con voz" title="Dictar con voz">🎤</button>
+        <div class="card quick">
+          <div class="voice" id="voiceBox">
+            <button type="button" class="mic-big" id="mic" aria-label="Dictar con voz">🎤</button>
+            <div>
+              <strong id="micLabel">Toca y dime qué vendes</strong>
+              <div class="small muted">“Tengo 100 kilos de jitomate a 12 pesos, normalmente a 25, me quedan 24 horas”</div>
+            </div>
           </div>
-          <button type="button" class="btn secondary" id="fill">✍️ Llenar el formulario con esto</button>
-          <p class="tiny muted">Interpretación por reglas (no es IA). Siempre revisas antes de publicar.</p>
+          <div class="hint" id="heard" hidden></div>
+
+          <button type="button" class="link-toggle" id="writeToggle" aria-expanded="false" aria-controls="writeBox">✍️ ¿Prefieres escribirlo?</button>
+          <div id="writeBox" class="write-box" hidden>
+            <p class="phrase" aria-label="Frase para completar">
+              Tengo <input class="blank n" data-s="kg" inputmode="decimal" placeholder="100" aria-label="Kilos"> kilos de
+              <span class="cur"><input class="blank w" data-s="product" list="plist" placeholder="jitomate" aria-label="Producto">,</span>
+              lo doy a <span class="cur">$<input class="blank n" data-s="rescue_price" inputmode="decimal" placeholder="12" aria-label="Precio de rescate"></span> el kilo
+              <span class="soft">(normalmente a <span class="cur">$<input class="blank n" data-s="ref_price" inputmode="decimal" placeholder="25" aria-label="Precio de siempre"></span>)</span>
+              y me quedan <input class="blank n" data-s="hours" inputmode="decimal" placeholder="24" aria-label="Horas"> horas.
+            </p>
+            <p class="tiny muted" style="margin:0">Lo que escribas aquí llena el formulario de abajo al instante.</p>
+            <details class="paste"><summary>¿Ya lo tienes escrito en WhatsApp? Pégalo aquí</summary>
+              <textarea id="speech" placeholder="Pega tu mensaje…" style="min-height:70px;margin-top:8px"></textarea>
+              <button type="button" class="btn secondary sm" id="fill" style="margin-top:8px">Llenar con este mensaje</button>
+            </details>
+          </div>
+          <p class="tiny muted" style="margin:10px 0 0">Interpretación por reglas (no es IA). Siempre revisas antes de publicar.</p>
         </div>
 
         ${templates.length ? `<div><div class="small muted">Mis plantillas</div><div class="chips">${templates.map((t) => `<button type="button" class="chip" data-tpl="${t.id}">⭐ ${e(t.name)}</button>`).join('')}</div></div>` : ''}
@@ -150,10 +168,21 @@ export default async function publish({ app, query, state }) {
       rescue_price_c: res, ref_price_c: ref, producer: { name: user.business_name || user.name }, municipality_name: '', quality: d.quality,
       producer_transport: d.producer_transport, available_g: g || 1, total_g: g || 1, expires_at: Date.now() + hours * 3600e3,
     }, { owner: true }).replace('🏘️ </span>', '🏘️ Tu municipio</span>');
+    syncBlanks();
+  }
+
+  // La frase para completar refleja el formulario (y viceversa) para que nunca se contradigan.
+  function syncBlanks() {
+    for (const b of $$('[data-s]', f)) {
+      if (document.activeElement !== b) b.value = f[b.dataset.s].value;
+      b.style.width = `${Math.max(b.placeholder.length, b.value.length, 2) + 1.5}ch`;
+    }
   }
 
   f.addEventListener('input', (ev) => {
-    if (ev.target.name === 'product') autoCategory();
+    const blank = ev.target.dataset?.s;
+    if (blank) set(blank, ev.target.value);
+    if (ev.target.name === 'product' || blank === 'product') autoCategory();
     update();
   });
   f.addEventListener('click', (ev) => {
@@ -179,8 +208,20 @@ export default async function publish({ app, query, state }) {
     location.hash = '#/publicar?nuevo=' + Date.now();
   });
 
-  $('#fill').addEventListener('click', () => {
-    const text = $('#speech').value.trim();
+  const writeBox = $('#writeBox');
+  const toggle = $('#writeToggle');
+  const openWrite = (open) => {
+    writeBox.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? 'Ocultar' : '✍️ ¿Prefieres escribirlo?';
+    if (open) syncBlanks();
+  };
+  toggle.addEventListener('click', () => {
+    openWrite(writeBox.hidden);
+    if (!writeBox.hidden) $('[data-s="kg"]', writeBox).focus();
+  });
+
+  function applyText(text) {
     if (!text) return toast('Escribe o dicta primero qué vendes', 'error');
     const r = parseSpoken(text);
     if (r.product) set('product', r.product), autoCategory();
@@ -191,13 +232,18 @@ export default async function publish({ app, query, state }) {
     update();
     const names = { product: 'producto', kg: 'kilos', rescuePrice: 'precio de rescate', refPrice: 'precio de siempre', hours: 'horas' };
     toast(r.missing.length ? `Revisa y completa: ${r.missing.map((m) => names[m]).join(', ')}` : 'Listo. Revisa los datos y publica.', r.missing.length ? '' : 'ok');
-  });
+  }
+  $('#fill').addEventListener('click', () => applyText($('#speech').value.trim()));
 
   // Dictado por voz con Web Speech API (si el navegador lo soporta, p. ej. Chrome en Android).
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const mic = $('#mic');
-  if (!SR) mic.hidden = true;
-  else {
+  if (!SR) {
+    // Sin dictado en este navegador: la escritura pasa a ser la vía directa.
+    $('#voiceBox').hidden = true;
+    toggle.hidden = true;
+    openWrite(true);
+  } else {
     let rec;
     mic.addEventListener('click', () => {
       if (rec) return rec.stop();
@@ -205,12 +251,20 @@ export default async function publish({ app, query, state }) {
       rec.lang = 'es-MX';
       rec.interimResults = true;
       mic.classList.add('rec');
-      rec.onresult = (ev) => ($('#speech').value = [...ev.results].map((r) => r[0].transcript).join(' '));
+      $('#micLabel').textContent = 'Te escucho… toca otra vez para terminar';
+      let said = '';
+      const heard = $('#heard');
+      rec.onresult = (ev) => {
+        said = [...ev.results].map((r) => r[0].transcript).join(' ');
+        heard.hidden = false;
+        heard.textContent = `Escuché: “${said}”`;
+      };
       rec.onerror = () => toast('No se pudo usar el micrófono. Puedes escribirlo.', 'error');
       rec.onend = () => {
         mic.classList.remove('rec');
+        $('#micLabel').textContent = 'Toca y dime qué vendes';
         rec = null;
-        if ($('#speech').value) $('#fill').click();
+        if (said) applyText(said);
       };
       rec.start();
     });

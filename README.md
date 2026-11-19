@@ -31,7 +31,7 @@ En la pantalla “Entrar” hay botones de un toque para cada cuenta. Para proba
 
 | Requerimiento del reto | Dónde |
 |---|---|
-| Formulario express (producto, kg, precio de remate, horas de frescura) | `#/publicar` — 5 campos obligatorios, chips de un toque, dictado por voz / texto estilo WhatsApp, vista previa y cálculo en vivo, borrador automático, plantillas, “publicar de nuevo” |
+| Formulario express (producto, kg, precio de remate, horas de frescura) | `#/publicar` — 5 campos obligatorios, chips de un toque, dictado por voz (principal) y, como opción secundaria, una frase para completar o pegar el mensaje de WhatsApp, vista previa y cálculo en vivo, borrador automático, plantillas, “publicar de nuevo” |
 | Feed público con temporizador regresivo y botón “Apartar” | `#/ofertas` — temporizador desde fecha de vencimiento **persistida** y hora del servidor; estados disponible / por vencer / agotado / vencido; filtros y orden |
 | Cálculo automático del ahorro | Detalle de oferta: habitual, rescate, ahorro, % y **ahorro neto con costo de traslado** |
 | Confirmación lista para recolección | `#/pedido/RD-0001` — folio, código de entrega de 6 dígitos, punto y horario, WhatsApp prellenado, “Cómo llegar” |
