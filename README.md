@@ -28,6 +28,23 @@ Desde un celular en la misma red Wi-Fi: usa la dirección que imprime la consola
 
 En la pantalla “Entrar” hay botones de un toque para cada cuenta. Para probar WhatsApp con tu propio teléfono, cámbialo en **Perfil**.
 
+## Fotos reales de productos
+
+```
+npm run fotos        # Windows PowerShell: npm.cmd run fotos
+```
+Descarga una sola vez (con internet) fotos reales de Wikimedia Commons a `public/img/productos/`, sólo con licencias libres (CC0, dominio público, CC BY, CC BY-SA; nunca NC/ND), y guarda autor y licencia en `creditos.json` (visibles en `#/creditos`). Después funcionan sin internet. Para cambiar una foto: bórrala y corre `npm run fotos papa`.
+
+## Usar en varias computadoras y celulares al mismo tiempo
+
+| Opción | Comando | Cuándo |
+|---|---|---|
+| **Enlace público https** (recomendado para el evento) | `npm run publico` (Windows: `npm.cmd run publico`) | Imprime un enlace `https://….trycloudflare.com` que funciona en cualquier celular o computadora, en cualquier red, con cámara y micrófono. La computadora que lo corre debe quedar encendida. El enlace cambia en cada arranque. |
+| Misma red Wi-Fi | `npm start` | Los demás abren `http://IP-de-tu-compu:3000` (la terminal la muestra). En celular, cámara y dictado no funcionan sin https. |
+| Servidor permanente | Render.com con `render.yaml` | Enlace https fijo; en el plan gratuito los datos vuelven a la demo al reiniciarse. |
+
+Todos ven los mismos datos en tiempo real porque hay un solo servidor y una sola base de datos. En un equipo nuevo la base de demostración se crea sola al arrancar.
+
 ## Qué está implementado (demostrable en vivo)
 
 | Requerimiento del reto | Dónde |

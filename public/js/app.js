@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { $, e, tickTimers, toast, errorBox } from './ui.js';
+import { setLocalPhotos } from './shared/catalog.js';
 
 const routes = [
   ['/', () => import('./views/landing.js')],
@@ -168,6 +169,8 @@ setInterval(pollNotifications, 30000);
 
 // Sin top-level await: las vistas importan este módulo y deben poder resolverlo de inmediato.
 (async () => {
+  // Créditos de fotos locales (si se corrió `npm run fotos`); sin ellas se usan íconos o Commons.
+  await fetch('/img/productos/creditos.json').then((r) => (r.ok ? r.json() : {})).then(setLocalPhotos).catch(() => {});
   await refreshUser();
   await router();
   pollNotifications();

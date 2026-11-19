@@ -39,14 +39,15 @@ export default async function mapView({ app, state }) {
   try {
     const L = await loadLeaflet();
     const map = L.map('map', { scrollWheelZoom: false }).setView([home.lat, home.lng], 8);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 13, attribution: '© colaboradores de OpenStreetMap',
+    // Teselas CARTO (datos de OpenStreetMap): gratuitas con atribución y de estilo claro.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 15, subdomains: 'abcd', attribution: '© colaboradores de OpenStreetMap · © CARTO',
     }).addTo(map);
-    L.circleMarker([home.lat, home.lng], { radius: 7, color: '#C88852', fillOpacity: 1 }).addTo(map).bindTooltip(`Tú: ${home.name}`);
+    L.circleMarker([home.lat, home.lng], { radius: 8, color: '#0F4D3A', fillColor: '#3FD39A', fillOpacity: 1, weight: 3 }).addTo(map).bindTooltip(`Tú: ${home.name}`);
     for (const g of groups) {
       const n = g.lots.length;
       L.marker([g.m.lat, g.m.lng], {
-        icon: L.divIcon({ className: '', html: `<div style="background:#244A36;color:#fff;border-radius:999px;padding:4px 10px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25)">${e(g.m.name)} · ${n}</div>`, iconSize: null }),
+        icon: L.divIcon({ className: '', html: `<div style="background:#0F4D3A;color:#fff;border-radius:999px;padding:5px 12px;font-family:DM Sans,system-ui,sans-serif;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25)">${e(g.m.name)} · ${n}</div>`, iconSize: null }),
       }).addTo(map).bindPopup(`<strong>${e(g.m.name)}</strong><br>${listHtml(g)}`);
     }
   } catch (err) {

@@ -99,8 +99,7 @@ export function validateRegistration(b) {
   const password = String(b.password || '');
   if (password.length < 8) e.password = 'Mínimo 8 caracteres';
   if (!MUNICIPALITIES.some((m) => m.id === b.municipality)) e.municipality = 'Selecciona tu municipio';
-  const business_name = str(b.business_name, 80) || null;
-  if (role === 'comprador' && !business_name) e.business_name = 'Nombre de tu negocio';
+  const business_name = str(b.business_name, 80) || (role === 'comprador' ? name || null : null);
   const capacity = b.capacity_kg === '' || b.capacity_kg == null ? null : Math.round(num(b.capacity_kg));
   if (role === 'transportista' && (!capacity || capacity <= 0 || capacity > 40000)) e.capacity_kg = 'Indica cuántos kilos carga tu vehículo';
   if (Object.keys(e).length) throw bad('Revisa los datos marcados', e);

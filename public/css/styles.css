@@ -672,3 +672,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-2); box-sh
 .code { background: linear-gradient(180deg, #E3F6EC, #fff); color: var(--green); border-color: var(--green-2); }
 .mono-tag { background: #DDF6EA; color: #0F7A52; }
 .notice.info { background: #E3F6EC; color: var(--green); }
+
+/* Aviso de error en formularios (registro) */
+.alert { border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.4; }
+.alert.error { background: #FDECEC; color: #8A1C1C; border: 1px solid #F3C2C2; }
+.alert ul { margin: 6px 0 0 18px; padding: 0; }

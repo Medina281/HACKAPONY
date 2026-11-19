@@ -94,8 +94,15 @@ export const STOCK_PHOTOS = {
   Naranja: { file: 'Oranges - whole-halved-segment.jpg', author: 'ver ficha en Commons', license: 'ver ficha en Commons' },
 };
 const commons = (file, w) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/ /g, '_'))}?width=${w}`;
+// Fotos descargadas al proyecto con `npm run fotos` (public/img/productos/creditos.json): funcionan sin internet.
+let LOCAL = {};
+export const setLocalPhotos = (m) => { LOCAL = m && typeof m === 'object' ? m : {}; };
+export const localPhotos = () => LOCAL;
 export const stockPhoto = (product, w = 480) => {
   const p = PRODUCTS.find((x) => normalize(x.name) === normalize(product || '') || x.alias.some((a) => normalize(a) === normalize(product || '')));
-  const s = p && STOCK_PHOTOS[p.name];
+  if (!p) return null;
+  const loc = LOCAL[normalize(p.name)];
+  if (loc) return { url: `/img/productos/${loc.file}`, file: loc.source_file, author: loc.author, license: loc.license, page: loc.page, local: true };
+  const s = STOCK_PHOTOS[p.name];
   return s ? { url: commons(s.file, w), ...s, page: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(s.file.replace(/ /g, '_'))}` } : null;
 };

@@ -1,5 +1,5 @@
 import { e } from '../ui.js';
-import { STOCK_PHOTOS, stockPhoto } from '../shared/catalog.js';
+import { PRODUCTS, stockPhoto } from '../shared/catalog.js';
 
 export default async function legal({ app, opts }) {
   if (opts.page === 'creditos') {
@@ -7,7 +7,7 @@ export default async function legal({ app, opts }) {
       <span class="mono-tag">Créditos</span><h1>Fotos, datos y tipografía</h1>
       <p class="muted">Las fotos que suben los productores son suyas. Cuando una oferta no tiene foto, mostramos una foto real de referencia de Wikimedia Commons, marcada como “referencia”.</p>
       <div class="card"><table><thead><tr><th>Producto</th><th>Archivo</th><th>Autor</th><th>Licencia</th></tr></thead><tbody>
-        ${Object.keys(STOCK_PHOTOS).map((p) => { const s = stockPhoto(p); return `<tr><td>${e(p)}</td><td><a href="${e(s.page)}" target="_blank" rel="noopener">${e(s.file)}</a></td><td>${e(s.author)}</td><td>${e(s.license)}</td></tr>`; }).join('')}
+        ${PRODUCTS.map((p) => [p.name, stockPhoto(p.name)]).filter(([, s]) => s).map(([n, s]) => `<tr><td>${e(n)}</td><td><a href="${e(s.page)}" target="_blank" rel="noopener">${e(s.file)}</a></td><td>${e(s.author)}</td><td>${e(s.license)}</td></tr>`).join('')}
       </tbody></table></div>
       <div class="card stack">
         <p><strong>Precios de mercado:</strong> Sistema Nacional de Información e Integración de Mercados (SNIIM), Secretaría de Economía.</p>

@@ -1,0 +1,14 @@
+# Despliegue permanente opcional en Render.com (plan gratuito): enlace https fijo para todos.
+# Nota: en el plan gratuito el disco no es persistente; los datos vuelven a la demo al reiniciarse.
+services:
+  - type: web
+    name: raiz-directa
+    runtime: node
+    plan: free
+    buildCommand: "echo sin dependencias"
+    startCommand: "node --disable-warning=ExperimentalWarning server.js"
+    envVars:
+      - key: NODE_VERSION
+        value: "22.20.0"
+      - key: COOKIE_SECURE
+        value: "1"

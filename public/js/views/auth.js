@@ -19,6 +19,7 @@ function login(app) {
   <div class="wrap page" style="max-width:460px">
     <h1>Entrar</h1>
     <form id="f" class="card" novalidate>
+      <div id="regmsg" class="alert error" role="alert" hidden></div>
       <div class="field"><label for="identifier">Teléfono o correo</label>
         <input id="identifier" name="identifier" inputmode="email" autocomplete="username" required placeholder="10 dígitos">
       </div>
@@ -61,11 +62,13 @@ function login(app) {
 }
 
 function register(app, role) {
+  role = role || 'comprador';
   app.innerHTML = `
   <div class="wrap page" style="max-width:520px">
     <h1>Crear cuenta</h1>
     <p class="muted">Sólo lo necesario. Puedes completar tu perfil después.</p>
     <form id="f" class="card" novalidate>
+      <div id="regmsg" class="alert error" role="alert" hidden></div>
       <div class="field"><label>¿Qué vas a hacer?</label>
         <div class="seg" role="radiogroup">
           <button type="button" data-role="productor" class="${role === 'productor' ? 'on' : ''}"><svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg> Vendo</button>
@@ -76,7 +79,7 @@ function register(app, role) {
       </div>
       <div class="field"><label for="name">Tu nombre</label><input id="name" name="name" autocomplete="name" required><div class="err" data-for="name"></div></div>
       <div class="field" id="biz" ${role === 'comprador' ? '' : 'hidden'}>
-        <label for="business_name">Nombre del negocio</label><input id="business_name" name="business_name" placeholder="Ej. Fonda Doña Lupe">
+        <label for="business_name">Nombre del negocio <span class="muted">(opcional)</span></label><input id="business_name" name="business_name" placeholder="Ej. Fonda Doña Lupe">
         <div class="err" data-for="business_name"></div>
         <label for="business_type" style="margin-top:10px">Tipo de negocio</label>
         <select id="business_type" name="business_type">
@@ -121,15 +124,23 @@ function register(app, role) {
     if (chosen === 'transportista') { body.business_name = ''; body.refrigerated = !!f.refrigerated.checked; }
     else { delete body.vehicle; delete body.capacity_kg; delete body.refrigerated; }
     const btn = f.querySelector('[type=submit]');
+    const box = $('#regmsg');
+    box.hidden = true;
     btn.disabled = true;
+    btn.textContent = 'Creando cuenta…';
     try {
       const { user } = await api('/api/auth/register', { method: 'POST', body });
       toast('¡Cuenta creada! <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg>', 'ok');
       afterLogin(user);
     } catch (err) {
       fieldErrors(f, err.fields);
-      toast(err.message, 'error');
+      const list = Object.values(err.fields || {});
+      box.innerHTML = `<b>${e(err.message || 'No se pudo crear la cuenta')}</b>${list.length ? `<ul>${list.map((m) => `<li>${e(m)}</li>`).join('')}</ul>` : ''}`;
+      box.hidden = false;
+      if (!list.length) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast(list[0] || err.message, 'error');
       btn.disabled = false;
+      btn.textContent = 'Crear cuenta';
     }
   });
 }

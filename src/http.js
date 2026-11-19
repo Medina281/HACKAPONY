@@ -12,12 +12,12 @@ export const bad = (msg, fields) => new HttpError(400, msg, fields);
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'same-origin',
+  'Referrer-Policy': 'strict-origin-when-cross-origin', // los servidores de mapas exigen saber el sitio de origen
   'X-Frame-Options': 'DENY',
   'Permissions-Policy': 'geolocation=(self), microphone=(self), camera=(self)',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-    "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com https://commons.wikimedia.org https://upload.wikimedia.org; connect-src 'self' https://api.open-meteo.com; " +
+    "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://unpkg.com https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org; connect-src 'self' https://api.open-meteo.com; " +
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 };
 
