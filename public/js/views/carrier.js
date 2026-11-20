@@ -1,7 +1,7 @@
 // Panel del transportista: es personal del productor. Ve sólo las entregas que su productor le asigna.
 import { api } from '../api.js';
 import { state, onLeave } from '../app.js';
-import { e, kg, empty, fmtDate } from '../ui.js';
+import { e, kg, empty, fmtDate, mxn } from '../ui.js';
 import { municipality } from '../shared/catalog.js';
 
 const STATUS = { asignada: ['Por cargar', 'warn'], recogida: ['En camino', 'info'], entregada: ['Entregado', 'done'], cancelada: ['Cancelado', 'muted'], abierta: ['Sin asignar', 'muted'] };
@@ -16,9 +16,10 @@ export default async function carrier({ app, query }) {
 
   const card = (d) => `
     <article class="card stack trip">
-      <div class="row between"><strong>${e(d.product)} · ${kg(d.weight_g)}</strong>${pill(d.status)}</div>
+      <div class="row between"><strong>${d.status === 'asignada' ? '<span class="pill warn">Nuevo pedido</span> ' : ''}${e(d.product)} · ${kg(d.weight_g)}</strong>${pill(d.status)}</div>
       <div class="small"><b>${e(d.buyer?.name || '')}</b><br><span class="muted">${e(d.buyer?.address || '')} · ${e(d.to_name)}</span></div>
       <div class="route"><span>${I('pin')} ${e(d.from_name)}</span><span class="muted">→ ${d.distance_km} km →</span><span>${I('flag')} ${e(d.to_name)}</span></div>
+      ${d.status !== 'cancelada' ? `<div class="small">Cobrar al entregar: <b>${mxn((d.total_rescue_c || 0) + (d.fee_c || 0))}</b> <span class="muted">(producto ${mxn(d.total_rescue_c || 0)} + envío ${mxn(d.fee_c || 0)})</span></div>` : ''}
       <div class="small muted">Entregar: ${fmtDate(d.pickup_at)}${d.order_status === 'apartado' ? ' · <b>esperando que tu productor confirme</b>' : ''}</div>
       ${d.needs_cold ? `<span class="pill info">${I('snow')} Requiere refrigeración</span>` : ''}
       <a class="btn ${d.status === 'entregada' || d.status === 'cancelada' ? 'ghost' : 'big'} block" href="#/entrega/${d.id}">${d.status === 'asignada' ? `${I('truck')} Ver y cargar` : d.status === 'recogida' ? `${I('check-circle')} Entregar` : 'Ver detalle'}</a>

@@ -20,6 +20,8 @@ before(async () => {
   carrier2 = client(app.base);
   await carrier2.post('/api/auth/login', { identifier: '4437770002', password: 'secreta123' });
   carrier2.id = r2.body.id;
+  // Cada proveedor fija su tarifa de envío
+  for (const p of [prod, prod2]) assert.equal((await p.post('/api/producer/delivery-tariff', { base: 25, per_km: 4 })).status, 200);
 });
 after(() => app.close());
 
@@ -114,6 +116,57 @@ describe('Transportista del productor', () => {
     assert.equal((await prod.patch(`/api/producer/drivers/${carrier.id}`, { active: false })).status, 409);
     await buyer.post(`/api/orders/${f.folio}/cancelar`, { reason: 'Ya no lo necesito' });
     assert.equal((await buyer.get(`/api/orders/${f.folio}`)).body.order.delivery.status, 'cancelada');
+  });
+});
+
+describe('Envío a domicilio con la tarifa del proveedor', () => {
+  test('el comercio elige "que me lo traigan" al apartar: costo calculado por el servidor y fijo', async () => {
+    assert.equal((await buyer.post('/api/producer/delivery-tariff', { base: 1, per_km: 1 })).status, 403, 'el comercio no fija tarifas');
+    assert.equal((await prod.post('/api/producer/delivery-tariff', { base: -5, per_km: 4 })).status, 400);
+    const { body: { lot } } = await prod.post('/api/lots', DELIVERS);
+    const q = (await buyer.get(`/api/lots/${lot.id}/delivery-quote`)).body.quote;
+    assert.ok(q.available && q.road_km >= 1);
+    assert.equal(q.fee_c, Math.round((2500 + 400 * q.road_km) / 100) * 100);
+    // Falta dirección → no se aparta nada
+    const before = (await buyer.get(`/api/lots/${lot.id}`)).body.lot.available_g;
+    assert.equal((await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, delivery: { address: 'x' } })).status, 400);
+    assert.equal((await buyer.get(`/api/lots/${lot.id}`)).body.lot.available_g, before, 'sin apartado a medias');
+    // Un fee enviado por el cliente se ignora
+    const r = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, fee_c: 1, delivery: { address: 'Av. Madero 100, Centro', fee_c: 1 } });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.order.delivery.fee_c, q.fee_c);
+    assert.equal(r.body.order.delivery.status, 'abierta', 'con varios transportistas, el proveedor elige');
+    // Cambiar la tarifa después no altera un pedido ya hecho
+    await prod.post('/api/producer/delivery-tariff', { base: 99, per_km: 9 });
+    assert.equal((await buyer.get(`/api/orders/${r.body.folio}`)).body.order.delivery.fee_c, q.fee_c);
+    await prod.post('/api/producer/delivery-tariff', { base: 25, per_km: 4 });
+  });
+
+  test('con un solo transportista, el pedido le llega directo como "nuevo pedido"', async () => {
+    const solo = await user(app.base, 'productor');
+    await solo.post('/api/producer/delivery-tariff', { base: 30, per_km: 5 });
+    const r = await solo.post('/api/producer/drivers', { name: 'Único', phone: '4437770055', password: 'secreta123', vehicle: 'Pickup' });
+    const chofer = client(app.base);
+    await chofer.post('/api/auth/login', { identifier: '4437770055', password: 'secreta123' });
+    const { body: { lot } } = await solo.post('/api/lots', DELIVERS);
+    const o = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } });
+    assert.equal(o.body.order.delivery.status, 'asignada');
+    const mine = (await chofer.get('/api/deliveries')).body.deliveries;
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0].fee_c, o.body.order.delivery.fee_c);
+    assert.equal(mine[0].total_rescue_c, o.body.order.total_rescue_c, 've cuánto cobrar');
+    const n = (await chofer.get('/api/notifications')).body;
+    assert.ok(JSON.stringify(n).includes('Nuevo pedido'), 'le llega aviso de nuevo pedido');
+    assert.ok(r.body.id);
+  });
+
+  test('sin tarifa o sin entrega a domicilio no se puede pedir que lo traigan', async () => {
+    const sin = await user(app.base, 'productor');
+    const { body: { lot } } = await sin.post('/api/lots', DELIVERS);
+    assert.equal((await buyer.get(`/api/lots/${lot.id}/delivery-quote`)).body.quote.available, false);
+    assert.equal((await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } })).status, 409);
+    const { body: { lot: l2 } } = await prod.post('/api/lots', JITOMATE);
+    assert.equal((await buyer.post(`/api/lots/${l2.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } })).status, 409);
   });
 });
 

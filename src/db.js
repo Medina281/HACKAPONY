@@ -284,6 +284,11 @@ const MIGRATIONS = [
   ALTER TABLE users ADD COLUMN team_code TEXT;
   CREATE UNIQUE INDEX idx_users_team_code ON users(team_code) WHERE team_code IS NOT NULL;
   `,
+  // v8: tarifa de envío que fija cada proveedor (cargo base + por km); el costo se calcula y se guarda al apartar
+  `
+  ALTER TABLE users ADD COLUMN delivery_base_c INTEGER CHECK (delivery_base_c IS NULL OR delivery_base_c >= 0);
+  ALTER TABLE users ADD COLUMN delivery_per_km_c INTEGER CHECK (delivery_per_km_c IS NULL OR delivery_per_km_c >= 0);
+  `,
 ];
 
 export function openDb(file) {

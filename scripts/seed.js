@@ -34,6 +34,8 @@ export function seed(dbPath = path.join(ROOT, 'data', 'raiz.db'), { now = Date.n
          VALUES (?,?,?,?,?,?,?,?,?,1,?)`,
       )
       .run(u.role, u.name, u.business || null, u.type || null, u.email || null, u.phone, u.password ? hashPassword(u.password) : pw, u.muni, u.pickup || null, now - 20 * 24 * H);
+    // Tarifa de envío de demostración que "fijó" cada proveedor demo (cargo base + por km); editable en Mi transporte.
+    if (u.role === 'productor') db.prepare('UPDATE users SET delivery_base_c = 2500, delivery_per_km_c = 400 WHERE id = ?').run(r.lastInsertRowid);
     users[key] = db.prepare('SELECT * FROM users WHERE id = ?').get(r.lastInsertRowid);
   };
 

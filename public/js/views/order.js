@@ -18,6 +18,8 @@ export default async function orderView({ app, params, state }) {
   const isBuyer = o.role === 'comprador';
   const isProducer = o.role === 'productor';
   const active = ['apartado', 'confirmado', 'listo'].includes(o.status);
+  const dl = o.delivery && o.delivery.status !== 'cancelada' ? o.delivery : null; // entrega a domicilio vigente
+  const fee = dl ? dl.fee_c || 0 : 0;
   const stepIdx = STEPS.indexOf(o.status);
   const muni = municipality(o.municipality);
   const mapQuery = encodeURIComponent(`${o.pickup_point || ''} ${muni?.name || ''}, Michoacán`);
@@ -32,26 +34,30 @@ export default async function orderView({ app, params, state }) {
       <div class="ticket-head">
         <div class="row between"><span class="small" style="opacity:.85">Folio</span>${orderPill(o.status)}</div>
         <h1 style="font-size:2.2rem">${e(o.folio)}</h1>
-        <p style="margin:0">${o.status === 'recolectado' ? '¡Entregado! Gracias por rescatar alimento <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg>' : o.status === 'cancelado' ? 'Pedido cancelado' : o.status === 'vencido' ? 'Venció sin recolección; el producto se liberó.' : isBuyer ? 'Apartado. Listo para recolección directa con el productor.' : 'Un comercio apartó tu producto.'}</p>
+        <p style="margin:0">${o.status === 'recolectado' ? '¡Entregado! Gracias por rescatar alimento <svg class="i" aria-hidden="true"><use href="/icons.svg#sprout"/></svg>' : o.status === 'cancelado' ? 'Pedido cancelado' : o.status === 'vencido' ? 'Venció sin recolección; el producto se liberó.' : isBuyer ? (dl ? 'Pedido hecho. El transportista del productor te lo lleva.' : 'Apartado. Listo para recolección directa con el productor.') : dl ? 'Un comercio pidió tu producto a domicilio.' : 'Un comercio apartó tu producto.'}</p>
       </div>
       <div class="ticket-body stack">
         ${active || o.status === 'recolectado' ? `<div class="steps" aria-label="Avance del pedido">${STEPS.map((s, i) => `<i class="${i <= stepIdx ? 'on' : ''}" title="${s}"></i>`).join('')}</div>
         <div class="row between tiny muted"><span>Apartado</span><span>Confirmado</span><span>Listo</span><span>Recogido</span></div>` : ''}
 
-        ${isBuyer && active ? `<div><div class="small muted center">Código de entrega · muéstralo al recoger</div><div class="code" aria-label="Código de entrega">${e(o.delivery_code)}</div>
-          <p class="tiny muted center" style="margin-top:6px">El productor lo captura para confirmar la entrega. No lo compartas antes de recibir tu producto.</p></div>` : ''}
+        ${isBuyer && active ? `<div><div class="small muted center">Código de entrega · ${dl ? 'dáselo a quien te lo lleve' : 'muéstralo al recoger'}</div><div class="code" aria-label="Código de entrega">${e(o.delivery_code)}</div>
+          <p class="tiny muted center" style="margin-top:6px">${dl ? 'El transportista lo captura al entregarte para cerrar el pedido.' : 'El productor lo captura para confirmar la entrega.'} No lo compartas antes de recibir tu producto.</p></div>` : ''}
 
         <dl class="kv">
           <dt>Producto</dt><dd>${e(o.product)} · <span class="muted">${e(qualityLabel(o.quality))}</span></dd>
           <dt>Cantidad</dt><dd>${kg(o.qty_g)}</dd>
           <dt>Precio</dt><dd>${mxn(o.unit_rescue_c)}/kg <span class="muted">(precio del productor ${mxn(o.unit_ref_c)})</span></dd>
-          <dt>Importe total</dt><dd style="font-size:1.25rem">${mxn(o.total_rescue_c)}</dd>
+          ${dl ? `<dt>Importe del producto</dt><dd>${mxn(o.total_rescue_c)}</dd>
+          <dt>Envío</dt><dd>${mxn(fee)} <span class="muted small">(≈${dl.distance_km} km, tarifa del productor)</span></dd>
+          <dt>Total a pagar</dt><dd style="font-size:1.25rem">${mxn(o.total_rescue_c + fee)}</dd>`
+          : `<dt>Importe total</dt><dd style="font-size:1.25rem">${mxn(o.total_rescue_c)}</dd>`}
           <dt>Ahorro</dt><dd style="color:var(--green)">${mxn(o.savings_c)} <span class="muted">(${mxn(o.total_ref_c)} − ${mxn(o.total_rescue_c)})</span></dd>
           <dt>${isBuyer ? 'Productor' : 'Comercio'}</dt><dd>${e(isBuyer ? o.producer.name : `${o.buyer.name} · ${o.buyer.contact}`)}</dd>
-          <dt>Recolección</dt><dd>${e(o.pickup_point || 'Por acordar')}<br><span class="muted">${e(muni?.name || '')}${o.pickup_window ? ` · ${e(o.pickup_window)}` : ''}</span></dd>
+          ${dl ? `<dt>Entrega en</dt><dd>${e(dl.address)}</dd>` : ''}
+          <dt>${dl ? 'Sale de' : 'Recolección'}</dt><dd>${e(o.pickup_point || 'Por acordar')}<br><span class="muted">${e(muni?.name || '')}${o.pickup_window ? ` · ${e(o.pickup_window)}` : ''}</span></dd>
           <dt>Horario acordado</dt><dd>${fmtDate(o.pickup_at)}${active ? `<br><span class="small muted">Tolerancia hasta ${fmtDate(o.hold_until)} · ${timer(o.hold_until)}</span>` : ''}</dd>
           <dt>Contacto</dt><dd>WhatsApp ${e(isBuyer ? o.producer.phone : o.buyer.phone)}</dd>
-          <dt>Pago</dt><dd>Directo al recoger: efectivo o transferencia. <span class="muted">Raíz Directa no procesa pagos.</span></dd>
+          <dt>Pago</dt><dd>${dl ? 'Al recibir, a quien te lo lleva' : 'Directo al recoger'}: efectivo o transferencia. <span class="muted">Raíz Directa no procesa pagos.</span></dd>
         </dl>
 
         ${active ? `<div class="stack">
@@ -109,7 +115,20 @@ export default async function orderView({ app, params, state }) {
   $('#report').addEventListener('click', () => reportDialog({ folio: o.folio }));
 
   // ---------- Entrega a domicilio (transporte del productor) ----------
-  $('#askTruck')?.addEventListener('click', () => { $('#truckForm').hidden = false; $('#askTruck').hidden = true; });
+  const showQuote = async () => {
+    const box = $('#truckQuote');
+    if (!box) return;
+    const f = $('#truckForm');
+    const qs = f.dest_lat.value ? `?lat=${f.dest_lat.value}&lng=${f.dest_lng.value}` : '';
+    try {
+      const { quote: q } = await api(`/api/lots/${o.lot_id}/delivery-quote${qs}`);
+      box.innerHTML = q?.available
+        ? `<dl><dt>Envío (≈${q.road_km} km)</dt><dd>${mxn(q.fee_c)}</dd><dt class="total">Total a pagar al recibir</dt><dd class="total">${mxn(o.total_rescue_c + q.fee_c)}</dd></dl>
+           <p class="tiny" style="margin:6px 0 0">Tarifa del productor: ${mxn(q.base_c)} + ${mxn(q.per_km_c)} por km. Queda fija al pedirlo.</p>`
+        : '<p class="small" style="margin:0">El productor aún no fija su tarifa de envío; por ahora se recoge en su punto.</p>';
+    } catch { box.innerHTML = '<p class="small" style="margin:0">No se pudo calcular el envío.</p>'; }
+  };
+  $('#askTruck')?.addEventListener('click', () => { $('#truckForm').hidden = false; $('#askTruck').hidden = true; showQuote(); });
   $('#truckForm')?.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const fd = Object.fromEntries(new FormData(ev.target));
@@ -129,7 +148,7 @@ export default async function orderView({ app, params, state }) {
     if (!('geolocation' in navigator)) { ev.target.checked = false; msg.textContent = 'Este navegador no permite leer tu ubicación.'; return; }
     msg.textContent = 'Leyendo tu ubicación…';
     navigator.geolocation.getCurrentPosition(
-      (p) => { f.dest_lat.value = p.coords.latitude; f.dest_lng.value = p.coords.longitude; msg.textContent = `Listo (±${Math.round(p.coords.accuracy)} m). Sólo la verán el productor y su transportista.`; },
+      (p) => { f.dest_lat.value = p.coords.latitude; f.dest_lng.value = p.coords.longitude; msg.textContent = `Listo (±${Math.round(p.coords.accuracy)} m). Sólo la verán el productor y su transportista.`; showQuote(); },
       () => { ev.target.checked = false; msg.textContent = 'No se pudo leer tu ubicación; se usará el municipio.'; },
       { enableHighAccuracy: true, timeout: 15000 },
     );
@@ -169,13 +188,12 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
       <button class="btn secondary" id="askTruck">Pedir entrega a domicilio</button>
       <form id="truckForm" class="stack" hidden>
         <div class="field"><label for="address">Dirección de entrega</label><input id="address" name="address" placeholder="Calle, número, colonia" required></div>
-        ${muniPicker('to_muni', state.user.municipality)}
         <label class="inline-check"><input type="checkbox" name="needs_cold"><span>Necesita refrigeración</span></label>
         <label class="inline-check"><input type="checkbox" id="useHere"><span>Usar mi ubicación actual como punto de entrega <span class="tiny muted">(más exacto para el tiempo de llegada)</span></span></label>
         <input type="hidden" name="dest_lat"><input type="hidden" name="dest_lng">
         <div class="tiny muted" id="hereMsg"></div>
         <input name="notes" placeholder="Notas (opcional): horario, referencias…">
-        <p class="tiny muted" style="margin:0">Si hay costo de envío, lo acuerdas directo con el productor.</p>
+        <div class="calc light" id="truckQuote"><dl><dt>Envío</dt><dd>calculando…</dd></dl></div>
         <button class="btn">Pedir entrega</button>
       </form>
     </div>`;
@@ -184,7 +202,7 @@ function deliveryBlock(o, isBuyer, isProducer, active, state, drivers) {
   const canAssign = isProducer && ['abierta', 'asignada'].includes(d.status);
   return `<div class="card stack">
     <div class="row between"><strong>${I('truck')} Entrega a domicilio</strong><span class="pill ${d.status === 'abierta' ? 'warn' : d.status === 'entregada' ? 'done' : 'info'}">${DSTATUS[d.status]}</span></div>
-    <div class="small">A ${e(d.address)}${d.needs_cold ? ` · ${I('snow')} refrigerado` : ''}</div>
+    <div class="small">A ${e(d.address)}${d.needs_cold ? ` · ${I('snow')} refrigerado` : ''} · envío ${mxn(d.fee_c || 0)}</div>
     ${c ? `<div class="small">${I('user')} ${e(c.name)} · ${e(c.vehicle || '')}</div>
       ${isBuyer && d.status !== 'entregada' ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${waLink(c.phone, `Hola, sobre el pedido ${o.folio} de Raíz Directa.`)}">${I('chat')} WhatsApp a quien lo lleva</a>` : ''}` : ''}
     ${canAssign ? (drivers.length ? `<form id="assign" class="stack">

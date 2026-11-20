@@ -3,10 +3,10 @@ import { api, serverNow } from '../api.js';
 import { go } from '../app.js';
 import { $, e, mxn, kg, media, statePill, timer, toast, fieldErrors, waLink, shareText, fmtDate, orderPill, shelfAnalysis } from '../ui.js';
 import { qualityLabel, QUALITY, REPORT_REASONS, municipality } from '../shared/catalog.js';
-import { orderTotals, discountPct, netSavings, haversineKm, ROAD_FACTOR, kgToGrams, pesosToCents } from '../shared/calc.js';
+import { orderTotals, discountPct, haversineKm, ROAD_FACTOR, kgToGrams } from '../shared/calc.js';
 import { refNote } from './components.js';
 
-const TRANSPORT_KEY = 'rd_transport';
+const ADDR_KEY = 'rd_delivery_address';
 
 export default async function lotView({ app, params, state }) {
   await ensureGeo();
@@ -44,11 +44,11 @@ export default async function lotView({ app, params, state }) {
               <dt>Zona</dt><dd>${e(l.municipality_name)}${l.state_name ? `, ${e(l.state_name)}` : ''}${l.region && l.region !== l.state_name ? ` · región ${e(l.region)}` : ''} <span class="muted small">(punto exacto al apartar)</span></dd>
               <dt>Distancia</dt><dd>~${straight} km en línea recta desde ${e(from.name)} <span class="muted small">(≈${road} km por carretera, estimado)</span></dd>
               ${l.pickup_window ? `<dt>Horario</dt><dd>${e(l.pickup_window)}</dd>` : ''}
-              <dt>Transporte</dt><dd>${l.producer_transport ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> El productor puede llevarlo (acordar costo)' : 'Recoge el comprador'}</dd>
+              <dt>Entrega</dt><dd>${l.producer_transport ? '<svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> Recoges tú o te lo lleva el transportista del productor (envío con su tarifa)' : 'Sólo se recoge en el punto del productor'}</dd>
               ${isOwner && l.pickup_point ? `<dt>Punto de recolección</dt><dd>${e(l.pickup_point)}</dd>` : ''}
             </dl>
             ${l.notes ? `<p class="card" style="background:var(--cream)">“${e(l.notes)}”</p>` : ''}
-            ${straight > 40 ? `<div class="notice"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> Está a más de 40 km en línea recta. Revisa el costo de traslado abajo antes de apartar.</div>` : ''}
+            ${straight > 40 ? `<div class="notice"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert"/></svg> Está a más de 40 km en línea recta. Considera el traslado${l.producer_transport ? ' o pide que te lo lleven' : ''}.</div>` : ''}
             <p class="tiny muted">El productor declaró que el producto es apto para consumo humano. El temporizador es una estimación comercial y no certifica la inocuidad del alimento. Revisa el producto al recogerlo.</p>
           </div>
         </div>
@@ -81,7 +81,6 @@ export default async function lotView({ app, params, state }) {
   if (isOwner) return ownerPanel(side, l, app, state);
 
   // ---------- Panel de apartado (comprador) ----------
-  const transport = { kmPerLiter: 10, pricePerLiter: 24, ...JSON.parse(localStorage.getItem(TRANSPORT_KEY) || '{}') };
   const startKg = Math.min(l.available_g, Math.max(l.min_g, Math.min(20000, l.available_g))) / 1000;
   const maxPickup = Math.min(l.expires_at, serverNow() + 72 * 3600e3);
   const pickupOptions = [1, 2, 4, 8, 24].map((h) => serverNow() + h * 3600e3).filter((t) => t <= l.expires_at);
@@ -98,26 +97,27 @@ export default async function lotView({ app, params, state }) {
         ${l.allow_partial ? `<div class="chips">${[...new Set([l.min_g / 1000, 10, 20, 50].filter((v) => v * 1000 <= l.available_g && v * 1000 >= l.min_g)), l.available_g / 1000].map((v) => `<button type="button" class="chip" data-kg="${v}">${v === l.available_g / 1000 ? `Todo (${v} kg)` : `${v} kg`}</button>`).join('')}</div>` : ''}
         <div class="err" data-for="kg"></div>
       </div>
-      <div class="field"><label for="pickup">¿Cuándo pasas por él?</label>
+      ${l.producer_transport ? `<div class="field"><span class="label" id="howLbl">¿Cómo lo recibes?</span>
+        <div class="seg" role="radiogroup" aria-labelledby="howLbl">
+          <button type="button" class="on" data-how="pickup" role="radio" aria-checked="true">Paso por él</button>
+          <button type="button" data-how="delivery" role="radio" aria-checked="false">Que me lo traigan</button>
+        </div></div>
+      <div id="dlv" class="stack" hidden>
+        <div class="field"><label for="address">Dirección de tu negocio</label><input id="address" name="address" maxlength="200" placeholder="Calle, número y colonia" autocomplete="street-address" value="${e(localStorage.getItem(ADDR_KEY) || '')}"><div class="err" data-for="address"></div></div>
+        <button type="button" class="btn ghost sm" id="useHere"><svg class="i" aria-hidden="true"><use href="/icons.svg#pin"/></svg> Usar mi ubicación actual (más exacto)</button>
+        <div class="tiny muted" id="hereMsg"></div>
+      </div>` : ''}
+      <div class="field"><label for="pickup" id="whenLbl">¿Cuándo pasas por él?</label>
         <select id="pickup" name="pickup">${pickupOptions.map((t, i) => `<option value="${t}" ${i === 1 || pickupOptions.length === 1 ? 'selected' : ''}>${fmtDate(t)}</option>`).join('')}
           <option value="${l.expires_at - 15 * 60e3}">Antes de que venza (${fmtDate(l.expires_at - 15 * 60e3)})</option>
         </select>
-        <div class="hint">Tolerancia de 3 horas. Si no se recoge, el apartado vence y el producto se libera.</div>
+        <div class="hint" id="whenHint">Tolerancia de 3 horas. Si no se recoge, el apartado vence y el producto se libera.</div>
       </div>
       <div class="calc" id="calc" aria-live="polite"></div>
-      <details class="more"><summary><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> ¿Me conviene por el traslado?</summary>
-        <div class="two" style="margin-top:10px">
-          <div class="field"><label class="small" for="dist">Km por carretera (ida)</label><input id="dist" inputmode="decimal" value="${road}"></div>
-          <div class="field"><label class="small" for="kml">Rendimiento km/l</label><input id="kml" inputmode="decimal" value="${transport.kmPerLiter}"></div>
-          <div class="field"><label class="small" for="ppl">Gasolina $/l</label><input id="ppl" inputmode="decimal" value="${transport.pricePerLiter}"></div>
-        </div>
-        <div class="calc light" id="net"></div>
-        <p class="tiny muted">Estimación: ida y vuelta × consumo × precio de gasolina que tú indiques (valores de ejemplo; ajústalos). No incluye tu tiempo ni casetas.</p>
-      </details>
       ${user?.role === 'comprador' || !user
         ? `<button class="btn big" type="submit" data-needs-open>${user ? 'Apartar ahora' : 'Entrar para apartar'}</button>`
         : '<div class="notice info">Inicia sesión con una cuenta de comercio para apartar.</div>'}
-      <p class="tiny muted center">El pago se acuerda directo con el productor al recoger (efectivo o transferencia). Raíz Directa no cobra ni retiene dinero.</p>
+      <p class="tiny muted center">Pagas directo al productor o a su transportista al recibir (efectivo o transferencia). Raíz Directa no cobra ni retiene dinero.</p>
     </form>
     <div class="card stack">
       <h3>Compartir o preguntar</h3>
@@ -134,26 +134,65 @@ export default async function lotView({ app, params, state }) {
   if (!open) return;
   const form = $('#res');
   const kgInput = $('#kgq');
+  let how = 'pickup';
+  let dest = null; // ubicación exacta del comercio si la comparte
+  let quoteR = null; // cotización del servidor (no editable)
+  let qState = 'idle';
+  const canQuote = user?.role === 'comprador';
+  const loadQuote = async () => {
+    if (!canQuote) { qState = 'login'; return recalc(); }
+    qState = 'loading'; recalc();
+    try {
+      const qs = dest ? `?lat=${dest.lat}&lng=${dest.lng}` : '';
+      quoteR = (await api(`/api/lots/${l.id}/delivery-quote${qs}`)).quote;
+      qState = quoteR?.available ? 'ok' : 'none';
+    } catch { qState = 'error'; }
+    recalc();
+  };
   const recalc = () => {
     const g = kgToGrams(kgInput.value || 0);
     const t = orderTotals(g, l.ref_price_c, l.rescue_price_c);
-    $('#calc').innerHTML = `<h3>Tu ahorro</h3><dl>
+    const del = how === 'delivery';
+    let ship = '';
+    if (del) {
+      if (qState === 'ok') ship = `<dt>Envío a tu negocio <span class="tiny">(≈${quoteR.road_km} km por carretera${quoteR.uses_location ? ', desde tu ubicación' : `, a ${e(municipality(user.municipality)?.name || 'tu municipio')}`})</span></dt><dd>${mxn(quoteR.fee_c)}</dd>
+        <dt class="total">Total a pagar al recibir</dt><dd class="total">${mxn(t.rescueTotal + quoteR.fee_c)}</dd>`;
+      else if (qState === 'loading') ship = '<dt>Envío</dt><dd>calculando…</dd>';
+      else if (qState === 'login') ship = '<dt>Envío</dt><dd>inicia sesión para verlo</dd>';
+      else if (qState === 'none') ship = '<dt>Envío</dt><dd>el productor aún no fija su tarifa</dd>';
+      else ship = '<dt>Envío</dt><dd>no se pudo calcular</dd>';
+    }
+    $('#calc').innerHTML = `<h3>Tu pedido</h3><dl>
       <dt>A precio del productor (${kg(g)} × ${mxn(l.ref_price_c)})</dt><dd>${mxn(t.refTotal)}</dd>
       <dt>Precio de rescate de ahora (${kg(g)} × ${mxn(l.rescue_price_c)})</dt><dd>${mxn(t.rescueTotal)}</dd>
       <dt>Descuento</dt><dd>${discountPct(l.ref_price_c, l.rescue_price_c)}%</dd>
-      <dt class="total">Ahorro bruto</dt><dd class="total">${mxn(t.savings)}</dd>
-      <dt>Pagas al recoger</dt><dd>${mxn(t.rescueTotal)}</dd></dl>`;
-    const kmPerLiter = Number($('#kml').value) || 0;
-    const pricePerLiter = Number($('#ppl').value) || 0;
-    localStorage.setItem(TRANSPORT_KEY, JSON.stringify({ kmPerLiter, pricePerLiter }));
-    const n = netSavings({ savingsCents: t.savings, distanceKm: Number($('#dist').value) || 0, kmPerLiter, pricePerLiterCents: pesosToCents(pricePerLiter) });
-    $('#net').innerHTML = `<dl><dt>Ahorro bruto</dt><dd>${mxn(t.savings)}</dd>
-      <dt>Traslado estimado (${n.km} km)</dt><dd>−${mxn(n.transportCents)}</dd>
-      <dt class="total">Ahorro neto estimado</dt><dd class="total">${mxn(n.netCents)}</dd></dl>
-      ${n.netCents < 0 ? '<p class="err">Con este traslado no te conviene; busca algo más cerca o compra más kilos.</p>' : ''}`;
+      <dt${del ? '' : ' class="total"'}>Ahorro en producto</dt><dd${del ? '' : ' class="total"'}>${mxn(t.savings)}</dd>
+      ${del ? ship : `<dt>Pagas al recoger</dt><dd>${mxn(t.rescueTotal)}</dd>`}</dl>
+      ${del && qState === 'ok' ? `<p class="tiny" style="margin:6px 0 0;opacity:.85">Envío con la tarifa que fijó el productor: ${mxn(quoteR.base_c)} + ${mxn(quoteR.per_km_c)} por km. Distancia estimada; queda fija al apartar.</p>` : ''}`;
+  };
+  const setHow = (v) => {
+    how = v;
+    form.querySelectorAll('[data-how]').forEach((b) => { b.classList.toggle('on', b.dataset.how === v); b.setAttribute('aria-checked', String(b.dataset.how === v)); });
+    $('#dlv').hidden = v !== 'delivery';
+    $('#whenLbl').textContent = v === 'delivery' ? '¿Para cuándo lo necesitas?' : '¿Cuándo pasas por él?';
+    $('#whenHint').textContent = v === 'delivery'
+      ? 'El transportista del productor te lo lleva; te avisamos cuando salga y puedes seguirlo en el mapa. Al recibirlo, dale tu código de entrega.'
+      : 'Tolerancia de 3 horas. Si no se recoge, el apartado vence y el producto se libera.';
+    if (v === 'delivery' && qState === 'idle') loadQuote(); else recalc();
   };
   recalc();
-  form.addEventListener('input', recalc);
+  form.addEventListener('input', (ev) => { if (ev.target.id === 'kgq') recalc(); });
+  form.addEventListener('click', (ev) => { const h = ev.target.closest('[data-how]'); if (h) setHow(h.dataset.how); });
+  $('#useHere')?.addEventListener('click', () => {
+    const msg = $('#hereMsg');
+    if (!('geolocation' in navigator)) { msg.textContent = 'Este navegador no permite leer tu ubicación; se usará tu municipio.'; return; }
+    msg.textContent = 'Leyendo tu ubicación…';
+    navigator.geolocation.getCurrentPosition(
+      (p) => { dest = { lat: p.coords.latitude, lng: p.coords.longitude }; msg.textContent = `Ubicación lista (±${Math.round(p.coords.accuracy)} m). Sólo la verán el productor y su transportista.`; loadQuote(); },
+      () => { msg.textContent = 'No se pudo leer tu ubicación; se usará tu municipio.'; },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  });
   form.addEventListener('click', (ev) => {
     const s = ev.target.closest('[data-step]');
     const c = ev.target.closest('[data-kg]');
@@ -175,14 +214,22 @@ export default async function lotView({ app, params, state }) {
     btn.disabled = true;
     btn.textContent = 'Apartando…';
     try {
-      const { folio } = await api(`/api/lots/${l.id}/reserve`, { method: 'POST', body: { kg: kgInput.value, pickup_at: Number($('#pickup').value) } });
-      toast(`¡Apartado! Folio ${folio}`, 'ok');
+      const body = { kg: kgInput.value, pickup_at: Number($('#pickup').value) };
+      if (how === 'delivery') {
+        const address = $('#address').value.trim();
+        if (address.length < 6) { fieldErrors(form, { address: 'Escribe la dirección de tu negocio' }); throw Object.assign(new Error('Falta la dirección de entrega'), { handled: true }); }
+        localStorage.setItem(ADDR_KEY, address);
+        body.delivery = { address, ...(dest ? { dest_lat: dest.lat, dest_lng: dest.lng } : {}) };
+      }
+      const { folio } = await api(`/api/lots/${l.id}/reserve`, { method: 'POST', body });
+      toast(how === 'delivery' ? `¡Pedido hecho! Folio ${folio}. Te avisamos cuando salga.` : `¡Apartado! Folio ${folio}`, 'ok');
       go(`#/pedido/${folio}`);
     } catch (err) {
-      fieldErrors(form, err.fields);
+      if (!err.handled) fieldErrors(form, err.fields);
       toast(err.status === 0 ? 'Sin conexión: el apartado NO se realizó. Intenta cuando tengas señal.' : err.message, 'error');
       btn.disabled = false;
       btn.textContent = 'Apartar ahora';
+      if (err.handled) return;
       if (err.status === 409) setTimeout(() => lotView({ app, params, state }), 1500); // refresca disponibilidad real
     }
   });

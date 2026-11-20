@@ -154,9 +154,26 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
     return { lot: lots.serializeLot(lots.getLotRow(db, Number(params.id)), t, { viewer: user }) };
   });
 
+  // Costo de envío que verá el comercio antes de apartar (lo calcula el servidor con la tarifa del proveedor)
+  route('GET', '/api/lots/:id/delivery-quote', ({ user, params, query }) => {
+    auth.requireRole(user, 'comprador');
+    const l = lots.getLotRow(db, Number(params.id));
+    const point = query.lat ? deliveries.validateDeliveryInput({ address: 'xxxxxx', dest_lat: query.lat, dest_lng: query.lng }).dest : null;
+    return { quote: deliveries.quote(db, l, user, point) };
+  });
+
   route('POST', '/api/lots/:id/reserve', ({ user, body, params, t }) => {
     auth.requireRole(user, 'comprador');
+    const wantsDelivery = !!body.delivery;
+    if (wantsDelivery) {
+      // Validar la entrega ANTES de apartar para no dejar un apartado a medias
+      const { dest } = deliveries.validateDeliveryInput(body.delivery);
+      const q = deliveries.quote(db, lots.getLotRow(db, Number(params.id)), user, dest);
+      if (!q?.offered) throw new HttpError(409, 'Este productor no ofrece entrega a domicilio; se recoge en su punto');
+      if (!q.available) throw new HttpError(409, 'Este productor aún no fija su tarifa de envío; por ahora se recoge en su punto');
+    }
     const folio = orders.reserve(db, t, user, Number(params.id), body);
+    if (wantsDelivery) deliveries.requestDelivery(db, t, user, { ...body.delivery, folio });
     return [201, { folio, order: orders.getOrder(db, user, folio) }];
   });
 
@@ -223,7 +240,11 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
   // ---------- Transportistas del productor (su propio personal) ----------
   route('GET', '/api/producer/drivers', ({ user }) => {
     auth.requireRole(user, 'productor');
-    return { drivers: deliveries.listDrivers(db, user), team_code: deliveries.teamCode(db, user) };
+    return { drivers: deliveries.listDrivers(db, user), team_code: deliveries.teamCode(db, user), tariff: deliveries.tariffOf(user) };
+  });
+  route('POST', '/api/producer/delivery-tariff', ({ user, body }) => {
+    auth.requireRole(user, 'productor');
+    return { tariff: deliveries.setTariff(db, user, body) };
   });
   route('POST', '/api/producer/team-code', ({ user }) => {
     auth.requireRole(user, 'productor');

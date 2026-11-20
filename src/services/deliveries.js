@@ -1,5 +1,6 @@
 // Entregas a domicilio con el transporte PROPIO del productor.
-// El transportista es personal del productor (lo da de alta el propio productor); no hay fletes abiertos ni tarifas en la app.
+// El transportista es personal del productor (lo da de alta el propio productor); no hay fletes abiertos.
+// El costo de envío sale de la tarifa que fija el productor (base + por km) y se guarda al pedir la entrega.
 //   abierta (el comercio la pidió) → asignada (el productor elige a su transportista) → recogida (el transportista cargó)
 //   → entregada (el transportista captura el código del comprador; el pedido pasa a "recolectado").
 import crypto from 'node:crypto';
@@ -13,7 +14,7 @@ import { completeOrder, ACTIVE } from './orders.js';
 const notify = (db, userId, text, link, now) =>
   db.prepare('INSERT INTO notifications (user_id, text, link, created_at) VALUES (?,?,?,?)').run(userId, text, link, now);
 
-const SELECT = `SELECT d.*, o.folio, o.status AS order_status, o.qty_g, o.pickup_at, o.delivery_code, l.product, l.pickup_point, l.pickup_window,
+const SELECT = `SELECT d.*, o.folio, o.status AS order_status, o.qty_g, o.pickup_at, o.delivery_code, o.total_rescue_c, l.product, l.pickup_point, l.pickup_window,
   p.name AS producer_name, p.business_name AS producer_business, p.phone AS producer_phone,
   b.name AS buyer_name, b.business_name AS buyer_business, b.phone AS buyer_phone,
   c.name AS carrier_name, c.phone AS carrier_phone, c.vehicle AS carrier_vehicle
@@ -26,7 +27,7 @@ export function serializeDelivery(d, viewer) {
     id: d.id, folio: d.folio, status: d.status, order_status: d.order_status, product: d.product, weight_g: d.weight_g,
     needs_cold: !!d.needs_cold, from_muni: d.from_muni, to_muni: d.to_muni,
     from_name: municipality(d.from_muni)?.name, to_name: municipality(d.to_muni)?.name,
-    distance_km: d.distance_km, pickup_at: d.pickup_at, pickup_window: d.pickup_window, notes: d.notes,
+    distance_km: d.distance_km, fee_c: d.fee_c, total_rescue_c: d.total_rescue_c, pickup_at: d.pickup_at, pickup_window: d.pickup_window, notes: d.notes,
     created_at: d.created_at, assigned_at: d.assigned_at, picked_at: d.picked_at, delivered_at: d.delivered_at,
     cancel_reason: d.cancel_reason, is_demo: !!d.is_demo, role,
   };
@@ -38,40 +39,93 @@ export function serializeDelivery(d, viewer) {
   return out;
 }
 
-/** El comercio pide que el productor se lo lleve (sólo si la oferta dice que el productor entrega). */
-export function requestDelivery(db, now, buyer, body) {
+// ---------- Tarifa y costo de envío ----------
+// Cada proveedor fija su tarifa (cargo base + $ por km). El costo se calcula en el servidor con la distancia
+// estimada por carretera (línea recta × ROAD_FACTOR) del punto del productor al del comercio, y queda fijo en el pedido.
+export function tariffOf(producer) {
+  if (producer?.delivery_base_c == null || producer?.delivery_per_km_c == null) return null;
+  return { base_c: producer.delivery_base_c, per_km_c: producer.delivery_per_km_c };
+}
+
+export function setTariff(db, producer, body) {
+  const base = Number(body.base);
+  const perKm = Number(body.per_km);
+  const e = {};
+  if (!Number.isFinite(base) || base < 0 || base > 5000) e.base = 'Entre $0 y $5,000';
+  if (!Number.isFinite(perKm) || perKm < 0 || perKm > 500) e.per_km = 'Entre $0 y $500 por km';
+  if (Object.keys(e).length) throw bad('Revisa tu tarifa de envío', e);
+  db.prepare('UPDATE users SET delivery_base_c = ?, delivery_per_km_c = ? WHERE id = ?').run(Math.round(base * 100), Math.round(perKm * 100), producer.id);
+  return tariffOf(db.prepare('SELECT * FROM users WHERE id = ?').get(producer.id));
+}
+
+/** Cotiza el envío de un lote hasta el comercio (su ubicación si la compartió; si no, su municipio). */
+export function quote(db, lotRow, buyer, point) {
+  const producer = db.prepare('SELECT * FROM users WHERE id = ?').get(lotRow.producer_id);
+  const t = tariffOf(producer);
+  const from = municipality(lotRow.municipality);
+  const dest = point || municipality(buyer.municipality);
+  if (!from || !dest) return null;
+  const straight = haversineKm(from, dest);
+  const roadKm = Math.max(1, Math.round(straight * ROAD_FACTOR * 10) / 10);
+  const fee = t ? Math.round((t.base_c + t.per_km_c * roadKm) / 100) * 100 : null; // a pesos cerrados
+  return { available: !!lotRow.producer_transport && !!t, offered: !!lotRow.producer_transport, road_km: roadKm, straight_km: straight,
+    fee_c: fee, base_c: t?.base_c ?? null, per_km_c: t?.per_km_c ?? null, uses_location: !!point };
+}
+
+export function validateDeliveryInput(body) {
   const e = {};
   const address = str(body.address, 200);
   if (address.length < 6) e.address = 'Escribe la dirección de entrega';
-  const toMuni = body.to_muni || buyer.municipality;
-  if (!municipality(toMuni)) e.to_muni = 'Municipio no válido';
   const dest = validPoint(body.dest_lat, body.dest_lng);
-  if ((body.dest_lat != null || body.dest_lng != null) && !dest) e.dest = 'Ubicación no válida';
+  if ((body.dest_lat != null && body.dest_lat !== '') && !dest) e.dest = 'Ubicación no válida';
   if (Object.keys(e).length) throw bad('Revisa los datos de la entrega', e);
+  return { address, dest };
+}
+
+/** El comercio pide que el productor se lo lleve. El costo sale de la tarifa del productor y no lo edita nadie más. */
+export function requestDelivery(db, now, buyer, body) {
+  const { address, dest } = validateDeliveryInput(body);
+  const toMuni = buyer.municipality;
 
   return tx(db, () => {
-    const o = db.prepare('SELECT o.*, l.municipality, l.producer_transport FROM orders o JOIN lots l ON l.id = o.lot_id WHERE o.folio = ?').get(String(body.folio));
+    const o = db.prepare('SELECT o.*, l.municipality, l.producer_transport, l.producer_id AS lot_producer FROM orders o JOIN lots l ON l.id = o.lot_id WHERE o.folio = ?').get(String(body.folio));
     if (!o) throw new HttpError(404, 'Pedido no encontrado');
     if (o.buyer_id !== buyer.id) throw new HttpError(403, 'Sólo quien apartó puede pedir la entrega');
     if (!o.producer_transport) throw new HttpError(409, 'Este productor no ofrece entrega a domicilio; el pedido se recoge en su punto');
     if (!ACTIVE.includes(o.status)) throw new HttpError(409, 'El pedido ya no está activo');
     const prev = db.prepare('SELECT * FROM deliveries WHERE order_id = ?').get(o.id);
     if (prev && prev.status !== 'cancelada') throw new HttpError(409, 'Este pedido ya tiene una entrega solicitada');
-    const dist = haversineKm(municipality(o.municipality), municipality(toMuni));
+    const q = quote(db, { municipality: o.municipality, producer_id: o.producer_id, producer_transport: o.producer_transport }, buyer, dest);
+    if (!q?.available) throw new HttpError(409, 'Este productor aún no fija su tarifa de envío; por ahora se recoge en su punto');
     const code = String(crypto.randomInt(100000, 1000000));
-    const vals = [buyer.id, o.producer_id, o.municipality, toMuni, address, dist, o.qty_g, body.needs_cold ? 1 : 0, str(body.notes, 300) || null, code, now];
+    const vals = [buyer.id, o.producer_id, o.municipality, toMuni, address, q.road_km, o.qty_g, body.needs_cold ? 1 : 0, str(body.notes, 300) || null, code, now, q.fee_c];
     if (prev) {
       db.prepare(`UPDATE deliveries SET buyer_id=?, producer_id=?, from_muni=?, to_muni=?, address=?, distance_km=?, weight_g=?, needs_cold=?, notes=?,
-        pickup_code=?, created_at=?, status='abierta', carrier_id=NULL, cancel_reason=NULL, assigned_at=NULL, picked_at=NULL, delivered_at=NULL WHERE id=?`).run(...vals, prev.id);
+        pickup_code=?, created_at=?, fee_c=?, status='abierta', carrier_id=NULL, cancel_reason=NULL, assigned_at=NULL, picked_at=NULL, delivered_at=NULL WHERE id=?`).run(...vals, prev.id);
     } else {
-      db.prepare(`INSERT INTO deliveries (buyer_id, producer_id, from_muni, to_muni, address, distance_km, weight_g, needs_cold, notes, pickup_code, created_at, order_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(...vals, o.id);
+      db.prepare(`INSERT INTO deliveries (buyer_id, producer_id, from_muni, to_muni, address, distance_km, weight_g, needs_cold, notes, pickup_code, created_at, fee_c, order_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(...vals, o.id);
     }
     db.prepare('UPDATE deliveries SET dest_lat = ?, dest_lng = ?, pos_lat = NULL, pos_lng = NULL, pos_acc = NULL, pos_at = NULL WHERE order_id = ?').run(dest?.lat ?? null, dest?.lng ?? null, o.id);
-    notify(db, o.producer_id, `${buyer.business_name || buyer.name} pidió entrega a domicilio del pedido ${o.folio}. Asígnalo a tu transportista.`, `#/pedido/${o.folio}`, now);
-    return db.prepare('SELECT id FROM deliveries WHERE order_id = ?').get(o.id).id;
+    const id = db.prepare('SELECT id FROM deliveries WHERE order_id = ?').get(o.id).id;
+    const who = buyer.business_name || buyer.name;
+    // Si el proveedor tiene un solo transportista activo, el pedido le llega directo; si tiene varios, el proveedor elige.
+    const drivers = db.prepare(`SELECT * FROM users WHERE role = 'transportista' AND active = 1 AND employer_id = ?`).all(o.producer_id)
+      .filter((c) => !c.capacity_kg || o.qty_g <= c.capacity_kg * 1000);
+    if (drivers.length === 1) {
+      const c = drivers[0];
+      db.prepare(`UPDATE deliveries SET status='asignada', carrier_id=?, assigned_at=? WHERE id=?`).run(c.id, now, id);
+      notify(db, c.id, `Nuevo pedido ${o.folio}: ${formatKg(o.qty_g)} para ${who}. Envío ${mxnText(q.fee_c)}.`, `#/entrega/${id}`, now);
+      notify(db, o.producer_id, `${who} pidió entrega a domicilio del pedido ${o.folio}; se asignó a ${c.name}. Confírmalo para que pueda cargarlo.`, `#/pedido/${o.folio}`, now);
+      notify(db, buyer.id, `${c.name} llevará tu pedido ${o.folio}`, `#/pedido/${o.folio}`, now);
+    } else {
+      notify(db, o.producer_id, `${who} pidió entrega a domicilio del pedido ${o.folio}. Asígnalo a tu transportista.`, `#/pedido/${o.folio}`, now);
+    }
+    return id;
   });
 }
+
+const mxnText = (c) => `$${(c / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
 
 export function getDeliveryRow(db, id) {
   const d = db.prepare(`${SELECT} WHERE d.id = ?`).get(id);

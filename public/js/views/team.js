@@ -1,6 +1,6 @@
 // "Mi transporte": el productor da de alta a su propio personal de reparto y ve sus entregas a domicilio.
 import { api } from '../api.js';
-import { $, e, kg, toast, fieldErrors, fmtDate } from '../ui.js';
+import { $, e, kg, toast, fieldErrors, fmtDate, mxn } from '../ui.js';
 import { onLeave } from '../app.js';
 import { loadLeaflet, addTiles } from './map.js';
 
@@ -8,13 +8,24 @@ const I = (n) => `<svg class="i" aria-hidden="true"><use href="/icons.svg#${n}"/
 const ST = { abierta: ['Por asignar', 'warn'], asignada: ['Asignada', 'info'], recogida: ['En camino', 'info'] };
 
 export default async function team({ app }) {
-  const [{ drivers, team_code: code }, { deliveries }, { fleet }] = await Promise.all([api('/api/producer/drivers'), api('/api/deliveries'), api('/api/producer/fleet')]);
+  const [{ drivers, team_code: code, tariff }, { deliveries }, { fleet }] = await Promise.all([api('/api/producer/drivers'), api('/api/deliveries'), api('/api/producer/fleet')]);
   const active = drivers.filter((d) => d.active);
   app.innerHTML = `
   <div class="wrap page stack" style="max-width:760px">
     <p><a href="#/productor">← Inicio</a></p>
     <div><span class="mono-tag">Mi transporte</span><h1 style="margin:6px 0 0">Entregas y transportistas</h1>
       <p class="muted" style="margin:4px 0 0">Tus transportistas son tu personal: sólo ven las entregas que tú les asignas.</p></div>
+
+    <form class="card stack" id="tariff" novalidate>
+      <div class="row between"><h2 style="margin:0">${I('truck')} Tu tarifa de envío</h2>${tariff ? `<span class="pill ok">${mxn(tariff.base_c)} + ${mxn(tariff.per_km_c)}/km</span>` : '<span class="pill warn">sin tarifa</span>'}</div>
+      <p class="small muted" style="margin:0">Con ella la app le calcula al comercio el costo de envío antes de apartar (distancia estimada por carretera desde tu municipio). El comercio no la puede cambiar.</p>
+      <div class="two">
+        <div class="field"><label for="base">Cargo base</label><div class="input-unit"><input id="base" name="base" inputmode="decimal" value="${tariff ? tariff.base_c / 100 : ''}" placeholder="25"><span>pesos</span></div><div class="err" data-for="base"></div></div>
+        <div class="field"><label for="per_km">Por kilómetro</label><div class="input-unit"><input id="per_km" name="per_km" inputmode="decimal" value="${tariff ? tariff.per_km_c / 100 : ''}" placeholder="4"><span>$/km</span></div><div class="err" data-for="per_km"></div></div>
+      </div>
+      <div class="small" id="tariffEx"></div>
+      <button class="btn secondary">Guardar tarifa</button>
+    </form>
 
     <div class="card stack" id="fleetCard">
       <div class="row between"><h2 style="margin:0">${I('truck')} Mis transportistas en ruta</h2><span class="pill info" id="fleetCount"></span></div>
@@ -27,7 +38,7 @@ export default async function team({ app }) {
       <a class="card row" href="${d.status === 'recogida' ? `#/seguimiento/${d.id}` : `#/pedido/${e(d.folio)}`}" style="text-decoration:none;color:inherit;flex-wrap:nowrap;gap:12px">
         <div class="grow" style="min-width:0"><div class="row between"><strong>${e(d.product)} · ${kg(d.weight_g)}</strong><span class="pill ${ST[d.status]?.[1] || 'muted'}">${ST[d.status]?.[0] || e(d.status)}</span></div>
           <div class="small muted">${e(d.buyer?.name || '')} · ${e(d.to_name)} · ${fmtDate(d.pickup_at)}</div>
-          <div class="small">${d.carrier ? `${I('user')} ${e(d.carrier.name)}` : `${I('alert')} <b>Falta asignar quién lo lleva</b>`}</div></div>
+          <div class="small">${d.carrier ? `${I('user')} ${e(d.carrier.name)}` : `${I('alert')} <b>Falta asignar quién lo lleva</b>`} · envío ${mxn(d.fee_c || 0)}</div></div>
         <span class="btn sm secondary" style="flex:none">${d.status === 'abierta' ? 'Asignar' : d.status === 'recogida' ? 'Seguir' : 'Ver'}</span>
       </a>`).join('') : '<p class="muted">No hay entregas a domicilio pendientes. Aparecen aquí cuando un comercio pide que se lo lleves.</p>'}
 
@@ -114,6 +125,20 @@ export default async function team({ app }) {
   }, 8000);
   onLeave(() => clearInterval(poll));
 
+  const ex = () => {
+    const b = Number($('#base').value) || 0, k = Number($('#per_km').value) || 0;
+    $('#tariffEx').textContent = `Ejemplo: a 10 km cobrarías ${mxn(Math.round((b + k * 10)) * 100)}; a 25 km, ${mxn(Math.round((b + k * 25)) * 100)}.`;
+  };
+  ex();
+  $('#tariff').addEventListener('input', ex);
+  $('#tariff').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    try {
+      await api('/api/producer/delivery-tariff', { method: 'POST', body: { base: $('#base').value, per_km: $('#per_km').value } });
+      toast('Tarifa de envío guardada', 'ok');
+      team({ app });
+    } catch (err) { fieldErrors(ev.target, err.fields); toast(err.message, 'error'); }
+  });
   $('#add').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const f = ev.target;
