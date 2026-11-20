@@ -130,7 +130,7 @@ export default async function publish({ app, query, state }) {
           <div class="field"><label class="inline-check"><input type="checkbox" name="allow_partial" ${initial.allow_partial !== false ? 'checked' : ''}><span>Acepto vender por partes (no sólo el lote completo)</span></label></div>
           <div class="field"><label for="pickup_point">Punto de recolección</label><input id="pickup_point" name="pickup_point" value="${v('pickup_point')}" placeholder="Ej. Entrada del rancho, junto a la báscula"><div class="hint">Sólo lo verá quien aparte.</div></div>
           <div class="field"><label for="pickup_window">Horario para recoger</label><input id="pickup_window" name="pickup_window" value="${v('pickup_window')}" placeholder="Ej. 7:00 a 13:00"></div>
-          <div class="field"><label class="inline-check"><input type="checkbox" name="producer_transport" ${initial.producer_transport ? 'checked' : ''}><span>Entrego a domicilio con mi transporte (el costo lo acuerdo con el comercio)</span></label></div>
+          <p class="small muted" style="margin:0"><svg class="i" aria-hidden="true"><use href="/icons.svg#truck"/></svg> El comercio puede recogerlo o pedir que se lo lleve tu transportista; el envío se cobra con tu tarifa de <a href="#/productor/equipo">Mi transporte</a>.</p>
           <div class="field"><label for="notes">Comentarios</label><textarea id="notes" name="notes" maxlength="400" placeholder="Ej. Ideal para salsa o aguas frescas">${v('notes')}</textarea></div>
         </details>
 
@@ -146,7 +146,7 @@ export default async function publish({ app, query, state }) {
   const get = () => {
     const d = Object.fromEntries(new FormData(f));
     d.allow_partial = f.allow_partial.checked;
-    d.producer_transport = f.producer_transport.checked;
+    d.producer_transport = true;
     d.declaration = f.declaration.checked;
     return d;
   };
@@ -264,7 +264,7 @@ export default async function publish({ app, query, state }) {
       <dt>Precio</dt><dd>Tu precio $${e(d.ref_price)}/kg · en la app empieza en <b>${mxn(res)}</b> (−${discountPct(ref, res)}%) y baja solo hasta ${mxn(priceFor(ref, TIERS[TIERS.length - 1].off))}</dd>
       <dt>Frescura</dt><dd>${e(d.hours)} h${shelf ? ` <span class="muted">(estimado por clima ~${shelf.hours} h)</span>` : ''}</dd>
       <dt>Estado</dt><dd>${e(qualityLabel(d.quality) || 'Sin indicar')}</dd>
-      <dt>Zona</dt><dd>${e(muni?.name || '')}${d.producer_transport ? ' · puedes llevarlo' : ''}</dd>
+      <dt>Zona</dt><dd>${e(muni?.name || '')}${' · recoger o envío a domicilio'}</dd>
       <dt>Recuperas</dt><dd>hasta <strong>${mxn(t.rescueTotal)}</strong> <span class="muted">si se aparta pronto (a tu precio valdría ${mxn(t.refTotal)})</span></dd>
     </dl>`;
   }

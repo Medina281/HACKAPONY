@@ -59,6 +59,8 @@ export function createApp({ dbPath = path.join(ROOT, 'data', 'raiz.db'), now = (
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(v.role, v.name, v.business_name, v.business_type, v.email, v.phone, auth.hashPassword(v.password), v.municipality, v.pickup_point, t, v.vehicle, v.capacity_kg, v.refrigerated);
+    if (v.role === 'productor')
+      db.prepare('UPDATE users SET delivery_base_c = ?, delivery_per_km_c = ? WHERE id = ?').run(deliveries.DEFAULT_TARIFF.base_c, deliveries.DEFAULT_TARIFF.per_km_c, r.lastInsertRowid);
     if (employer) {
       db.prepare('UPDATE users SET employer_id = ?, municipality = ? WHERE id = ?').run(employer.id, employer.municipality, r.lastInsertRowid);
       db.prepare('INSERT INTO notifications (user_id, text, link, created_at) VALUES (?,?,?,?)').run(employer.id, `${v.name} se registró como tu transportista`, '#/productor/equipo', t);

@@ -59,7 +59,7 @@ export function validateLot(b) {
     municipality,
     pickup_point: str(b.pickup_point, 160) || null,
     pickup_window: str(b.pickup_window, 80) || null,
-    producer_transport: b.producer_transport ? 1 : 0,
+    producer_transport: 1, // toda oferta nueva puede enviarse a domicilio con el transportista del proveedor
     notes: str(b.notes, 400) || null,
     input_method: ['voz', 'frase'].includes(b.input_method) ? b.input_method : 'formulario',
     shelf_json: sanitizeShelf(b.shelf),

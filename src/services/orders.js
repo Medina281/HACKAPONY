@@ -167,7 +167,7 @@ export function transition(db, now, user, folio, action, body = {}) {
       confirmar: `El productor confirmó tu pedido ${o.folio}`,
       listo: `Tu pedido ${o.folio} está listo para recolección`,
       entregar: `Entrega registrada del pedido ${o.folio}. ¡Gracias por rescatar alimento!`,
-      cancelar: `El pedido ${o.folio} fue cancelado`,
+      cancelar: isBuyer ? `El comercio canceló el pedido ${o.folio}. Motivo: ${note}` : o.status === 'apartado' ? `El productor rechazó tu pedido ${o.folio}. Motivo: ${note}` : `El productor canceló tu pedido ${o.folio}. Motivo: ${note}`,
     }[action];
     notify(db, other, msg, `#/pedido/${o.folio}`, now);
     return t.to;

@@ -42,6 +42,9 @@ export function serializeDelivery(d, viewer) {
 // ---------- Tarifa y costo de envío ----------
 // Cada proveedor fija su tarifa (cargo base + $ por km). El costo se calcula en el servidor con la distancia
 // estimada por carretera (línea recta × ROAD_FACTOR) del punto del productor al del comercio, y queda fijo en el pedido.
+// Tarifa inicial con la que arranca cada proveedor (la ajusta en Mi transporte).
+export const DEFAULT_TARIFF = { base_c: 2500, per_km_c: 400 };
+
 export function tariffOf(producer) {
   if (producer?.delivery_base_c == null || producer?.delivery_per_km_c == null) return null;
   return { base_c: producer.delivery_base_c, per_km_c: producer.delivery_per_km_c };

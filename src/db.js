@@ -289,6 +289,11 @@ const MIGRATIONS = [
   ALTER TABLE users ADD COLUMN delivery_base_c INTEGER CHECK (delivery_base_c IS NULL OR delivery_base_c >= 0);
   ALTER TABLE users ADD COLUMN delivery_per_km_c INTEGER CHECK (delivery_per_km_c IS NULL OR delivery_per_km_c >= 0);
   `,
+  // v9: todas las ofertas se pueden enviar a domicilio; proveedores sin tarifa arrancan con la inicial (editable)
+  `
+  UPDATE lots SET producer_transport = 1;
+  UPDATE users SET delivery_base_c = 2500, delivery_per_km_c = 400 WHERE role = 'productor' AND (delivery_base_c IS NULL OR delivery_per_km_c IS NULL);
+  `,
 ];
 
 export function openDb(file) {

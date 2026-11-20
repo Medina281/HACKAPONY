@@ -7,6 +7,8 @@ const TABS = [
   ['historial', '<svg class="i" aria-hidden="true"><use href="/icons.svg#history"/></svg> Historial', (o) => ['recolectado', 'cancelado', 'vencido'].includes(o.status)],
 ];
 
+const REJECT = ['No tengo suficiente producto', 'Ya se vendió por otro canal', 'El producto se deterioró', 'No puedo entregar en esa zona u horario', 'Otro motivo'];
+
 export default async function producerOrders({ app, query }) {
   const tab = TABS.find((t) => t[0] === query.tab) || TABS[0];
   const { orders } = await api('/api/orders?as=productor');
@@ -27,9 +29,9 @@ export default async function producerOrders({ app, query }) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      await api(`/api/orders/${folio}/${action}`, { method: 'POST', body: action === 'entregar' ? { code: form.code.value } : {} });
-      toast(action === 'entregar' ? `Entrega registrada <svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> ${folio}` : `Pedido ${folio} actualizado`, 'ok');
-      producerOrders({ app, query: { tab: action === 'entregar' ? 'historial' : 'entregar' } });
+      await api(`/api/orders/${folio}/${action}`, { method: 'POST', body: action === 'entregar' ? { code: form.code.value } : action === 'cancelar' ? { reason: form.reason.value } : {} });
+      toast(action === 'entregar' ? `Entrega registrada <svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> ${folio}` : action === 'cancelar' ? `Pedido ${folio} rechazado; avisamos al comercio` : `Pedido ${folio} actualizado`, 'ok');
+      producerOrders({ app, query: { tab: action === 'entregar' || action === 'cancelar' ? 'historial' : 'entregar' } });
     } catch (err) {
       toast(err.message, 'error');
       btn.disabled = false;
@@ -44,7 +46,12 @@ function card(o) {
     <div class="row between"><strong>${e(o.folio)}</strong>${orderPill(o.status)}</div>
     <div><span style="font-size:1.15rem;font-weight:700">${kg(o.qty_g)} de ${e(o.product)}</span> · ${mxn(o.total_rescue_c)}</div>
     <div class="small muted"><svg class="i" aria-hidden="true"><use href="/icons.svg#utensils"/></svg> ${e(o.buyer.name)} (${e(o.buyer.contact)}) · <svg class="i" aria-hidden="true"><use href="/icons.svg#clock"/></svg> ${fmtDate(o.pickup_at)}</div>
-    ${o.status === 'apartado' ? `<form data-folio="${e(o.folio)}" data-action="confirmar"><button type="submit" class="btn block"><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> Confirmar pedido</button></form>` : ''}
+    ${o.status === 'apartado' ? `<form data-folio="${e(o.folio)}" data-action="confirmar"><button type="submit" class="btn block"><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> Confirmar pedido</button></form>
+      <details class="more"><summary>Rechazar pedido</summary>
+        <form data-folio="${e(o.folio)}" data-action="cancelar" class="stack" style="margin-top:8px">
+          <select name="reason" aria-label="Motivo">${REJECT.map((r) => `<option>${e(r)}</option>`).join('')}</select>
+          <button type="submit" class="btn danger">Rechazar y avisar al comercio</button>
+        </form></details>` : ''}
     ${o.status === 'confirmado' ? `<form data-folio="${e(o.folio)}" data-action="listo"><button type="submit" class="btn secondary block"><svg class="i" aria-hidden="true"><use href="/icons.svg#package"/></svg> Marcar listo para recoger</button></form>` : ''}
     ${['confirmado', 'listo'].includes(o.status) ? `
       <form data-folio="${e(o.folio)}" data-action="entregar" class="row" style="flex-wrap:nowrap">

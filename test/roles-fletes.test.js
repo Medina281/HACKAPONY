@@ -99,11 +99,12 @@ describe('Transportista del productor', () => {
     assert.ok(s.delivered >= 1);
   });
 
-  test('sólo se pide entrega si el productor la ofrece; capacidad del vehículo se respeta', async () => {
-    const { body: { lot } } = await prod.post('/api/lots', JITOMATE); // sin entrega a domicilio
+  test('toda oferta nueva admite envío a domicilio; capacidad del vehículo se respeta', async () => {
+    const { body: { lot } } = await prod.post('/api/lots', { ...JITOMATE, producer_transport: false });
+    assert.equal(lot.producer_transport, true, 'siempre con envío a domicilio');
     const { body: o } = await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10 });
-    assert.equal((await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2' })).status, 409);
     assert.equal((await prod.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2' })).status, 403);
+    assert.equal((await buyer.post('/api/deliveries', { folio: o.folio, address: 'Calle 1 #2' })).status, 201);
     const big = await prod2.post('/api/lots', { ...DELIVERS, kg: 900 });
     const { body: o2 } = await buyer.post(`/api/lots/${big.body.lot.id}/reserve`, { kg: 800 });
     const d = await buyer.post('/api/deliveries', { folio: o2.folio, address: 'Calle 1 #2' });
@@ -160,13 +161,27 @@ describe('Envío a domicilio con la tarifa del proveedor', () => {
     assert.ok(r.body.id);
   });
 
-  test('sin tarifa o sin entrega a domicilio no se puede pedir que lo traigan', async () => {
-    const sin = await user(app.base, 'productor');
-    const { body: { lot } } = await sin.post('/api/lots', DELIVERS);
-    assert.equal((await buyer.get(`/api/lots/${lot.id}/delivery-quote`)).body.quote.available, false);
-    assert.equal((await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } })).status, 409);
-    const { body: { lot: l2 } } = await prod.post('/api/lots', JITOMATE);
-    assert.equal((await buyer.post(`/api/lots/${l2.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } })).status, 409);
+  test('un proveedor nuevo arranca con la tarifa inicial y puede dejar el envío gratis', async () => {
+    const nuevo = await user(app.base, 'productor');
+    assert.deepEqual((await nuevo.get('/api/producer/drivers')).body.tariff, { base_c: 2500, per_km_c: 400 });
+    const { body: { lot } } = await nuevo.post('/api/lots', JITOMATE);
+    assert.equal((await buyer.get(`/api/lots/${lot.id}/delivery-quote`)).body.quote.available, true);
+    await nuevo.post('/api/producer/delivery-tariff', { base: 0, per_km: 0 });
+    assert.equal((await buyer.get(`/api/lots/${lot.id}/delivery-quote`)).body.quote.fee_c, 0);
+  });
+
+  test('el proveedor rechaza un pedido y el comercio cancela otro; cada quien recibe el motivo', async () => {
+    const { body: { lot } } = await prod.post('/api/lots', JITOMATE);
+    const a = (await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10, delivery: { address: 'Calle Real 5, Centro' } })).body;
+    assert.equal((await prod.post(`/api/orders/${a.folio}/cancelar`, { reason: 'No tengo suficiente producto' })).status, 200);
+    const o = (await buyer.get(`/api/orders/${a.folio}`)).body.order;
+    assert.equal(o.status, 'cancelado');
+    assert.equal(o.delivery.status, 'cancelada');
+    assert.ok(JSON.stringify((await buyer.get('/api/notifications')).body).includes('rechazó tu pedido'));
+    const b = (await buyer.post(`/api/lots/${lot.id}/reserve`, { kg: 10 })).body;
+    assert.equal((await buyer.post(`/api/orders/${b.folio}/cancelar`, { reason: 'Ya no lo necesito' })).status, 200);
+    assert.ok(JSON.stringify((await prod.get('/api/notifications')).body).includes('El comercio canceló'));
+    assert.equal((await buyer.get(`/api/lots/${lot.id}`)).body.lot.available_g, lot.available_g, 'los kilos regresan');
   });
 });
 

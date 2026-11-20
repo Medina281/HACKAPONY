@@ -6,7 +6,7 @@ import { reportDialog } from './lot.js';
 const STEPS = ['apartado', 'confirmado', 'listo', 'recolectado'];
 const CANCEL_REASONS = {
   comprador: [['Ya no lo necesito', 'Ya no lo necesito'], ['No podré recogerlo', 'No podré recogerlo a tiempo'], ['no_corresponde', 'Al recoger, el producto no correspondía a lo publicado']],
-  productor: [['Ya se vendió por otro canal', 'Ya se vendió por otro canal'], ['El producto se deterioró', 'El producto se deterioró'], ['El comprador no se presentó', 'El comprador no se presentó'], ['Otro motivo', 'Otro motivo']],
+  productor: [['No tengo suficiente producto', 'No tengo suficiente producto'], ['Ya se vendió por otro canal', 'Ya se vendió por otro canal'], ['El producto se deterioró', 'El producto se deterioró'], ['No puedo entregar en esa zona u horario', 'No puedo entregar en esa zona u horario'], ['El comprador no se presentó', 'El comprador no se presentó'], ['Otro motivo', 'Otro motivo']],
 };
 
 export default async function orderView({ app, params, state }) {
@@ -20,6 +20,7 @@ export default async function orderView({ app, params, state }) {
   const active = ['apartado', 'confirmado', 'listo'].includes(o.status);
   const dl = o.delivery && o.delivery.status !== 'cancelada' ? o.delivery : null; // entrega a domicilio vigente
   const fee = dl ? dl.fee_c || 0 : 0;
+  const rejectLbl = isProducer && o.status === 'apartado' ? 'Rechazar pedido' : 'Cancelar pedido';
   const stepIdx = STEPS.indexOf(o.status);
   const muni = municipality(o.municipality);
   const mapQuery = encodeURIComponent(`${o.pickup_point || ''} ${muni?.name || ''}, Michoacán`);
@@ -79,12 +80,16 @@ export default async function orderView({ app, params, state }) {
             <button class="btn big"><svg class="i" aria-hidden="true"><use href="/icons.svg#check-circle"/></svg> Registrar entrega</button></form>` : ''}
         </div>` : ''}
 
-        ${active && (isBuyer || isProducer) ? `<details class="more"><summary>Cancelar pedido</summary>
-          <form id="cancel" class="stack" style="margin-top:10px">
-            <select name="reason">${CANCEL_REASONS[o.role].map(([v, l]) => `<option value="${e(v)}">${e(l)}</option>`).join('')}</select>
-            <p class="tiny muted">${isBuyer ? 'Si el producto no correspondía a lo publicado, se abre un reporte y la oferta se pausa para revisión.' : 'Los kilos regresan a tu oferta si sigue vigente.'}</p>
-            <button class="btn danger">Cancelar pedido</button>
-          </form></details>` : ''}
+        ${active && (isBuyer || isProducer) ? (dl && dl.status === 'recogida'
+          ? '<p class="small muted">El pedido ya va en camino; ya no se puede cancelar.</p>'
+          : `<div class="stack">
+            <button type="button" class="btn ghost block" id="openCancel" style="color:var(--red, #b42318);border-color:currentColor">${rejectLbl}</button>
+            <form id="cancel" class="card stack" hidden>
+              <label for="reason"><strong>${isProducer && o.status === 'apartado' ? '¿Por qué lo rechazas?' : '¿Por qué lo cancelas?'}</strong></label>
+              <select id="reason" name="reason">${CANCEL_REASONS[o.role].map(([v, l]) => `<option value="${e(v)}">${e(l)}</option>`).join('')}</select>
+              <p class="tiny muted" style="margin:0">${isBuyer ? 'Le avisamos al productor. Si el producto no correspondía a lo publicado, se abre un reporte y la oferta se pausa para revisión.' : 'Le avisamos al comercio con el motivo. Los kilos regresan a tu oferta si sigue vigente.'}${dl ? ' La entrega a domicilio también se cancela.' : ''}</p>
+              <div class="two"><button class="btn danger">${rejectLbl}</button><button type="button" class="btn ghost" id="closeCancel">No, regresar</button></div>
+            </form></div>`) : ''}
 
         ${o.status === 'cancelado' && o.cancel_reason ? `<div class="notice">Motivo: ${e(o.cancel_reason === 'no_corresponde' ? 'El producto no correspondía a lo publicado' : o.cancel_reason)}</div>` : ''}
 
@@ -108,9 +113,11 @@ export default async function orderView({ app, params, state }) {
   };
   app.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => act(b.dataset.act)));
   $('#deliver')?.addEventListener('submit', (ev) => (ev.preventDefault(), act('entregar', { code: ev.target.code.value })));
+  $('#openCancel')?.addEventListener('click', () => { $('#cancel').hidden = false; $('#openCancel').hidden = true; $('#cancel').scrollIntoView({ block: 'center', behavior: 'smooth' }); });
+  $('#closeCancel')?.addEventListener('click', () => { $('#cancel').hidden = true; $('#openCancel').hidden = false; });
   $('#cancel')?.addEventListener('submit', (ev) => {
     ev.preventDefault();
-    if (confirm('¿Seguro que quieres cancelar este pedido?')) act('cancelar', { reason: ev.target.reason.value });
+    act('cancelar', { reason: ev.target.reason.value });
   });
   $('#report').addEventListener('click', () => reportDialog({ folio: o.folio }));
 
